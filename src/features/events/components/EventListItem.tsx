@@ -1,9 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { getMapUrl } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/events/types";
 
 interface EventListItemProps {
   event: MyEvent;
-  showRsvpStatus: boolean;
   onPress: () => void;
 }
 
@@ -31,7 +31,7 @@ const RSVP_LABELS: Record<RsvpStatus, string> = {
   NO: "You declined",
 };
 
-export function EventListItem({ event, showRsvpStatus, onPress }: EventListItemProps) {
+export function EventListItem({ event, onPress }: EventListItemProps) {
   // FP-66 AC: cancelled events stay in the list, still tappable, still
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
@@ -44,14 +44,26 @@ export function EventListItem({ event, showRsvpStatus, onPress }: EventListItemP
     >
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTime(event.start_datetime)}</Text>
-      <Text style={styles.meta}>{event.location_name}</Text>
+      {/* Nested Pressable, not a plain Text tap handler: RN's responder
+          system gives this its own touch target, so tapping it opens the
+          map without also firing the outer card's onPress. alignSelf:
+          'flex-start' keeps its tap area sized to the text itself — the
+          card (its parent) defaults to alignItems: 'stretch', which would
+          otherwise stretch this Pressable to the full row width. */}
+      <Pressable
+        style={styles.locationPressable}
+        onPress={() => Linking.openURL(getMapUrl(event))}
+        testID={`event-item-map-${event.id}`}
+      >
+        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
+      </Pressable>
       <View style={styles.footer}>
         <View style={[styles.pill, isCancelled && styles.pillCancelled]}>
           <Text style={[styles.pillText, isCancelled && styles.pillTextCancelled]}>
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
-        {showRsvpStatus && event.rsvp_status ? (
+        {event.rsvp_status ? (
           <Text style={styles.rsvpText}>{RSVP_LABELS[event.rsvp_status]}</Text>
         ) : null}
       </View>
@@ -77,6 +89,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#555",
     marginTop: 2,
+  },
+  locationPressable: {
+    alignSelf: "flex-start",
+  },
+  locationLink: {
+    color: "#2563eb",
+    textDecorationLine: "underline",
   },
   footer: {
     flexDirection: "row",

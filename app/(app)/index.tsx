@@ -1,18 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router, Stack, useFocusEffect } from "expo-router";
-import { useSession } from "@/src/features/auth/hooks/useSession";
+import { router, Stack } from "expo-router";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import type { MyEvent } from "@/src/features/events/types";
 
 export default function MyEventsScreen() {
-  const { session } = useSession();
-  // Admin isn't covered by FP-94/66/95's ACs — defaults to the Member-style
-  // RSVP list rather than the Leader roster view (Grounding Check).
-  const isLeader = session?.user.app_metadata?.role === "LEADER";
-
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -36,13 +30,12 @@ export default function MyEventsScreen() {
     }
   }, []);
 
-  // Fetches on mount and every time this screen regains focus (e.g.
-  // returning from the detail screen after an RSVP submission).
-  useFocusEffect(
-    useCallback(() => {
-      loadEvents(false);
-    }, [loadEvents])
-  );
+  // Fetches once on mount only — no refetch-on-focus (that caused a
+  // full-screen loading blink on every return to this screen). Pull-to-
+  // refresh (loadEvents(true) below) is the only other way to refresh.
+  useEffect(() => {
+    loadEvents(false);
+  }, [loadEvents]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -91,11 +84,7 @@ export default function MyEventsScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <EventListItem
-              event={item}
-              showRsvpStatus={!isLeader}
-              onPress={() => handlePressEvent(item)}
-            />
+            <EventListItem event={item} onPress={() => handlePressEvent(item)} />
           )}
         />
       )}

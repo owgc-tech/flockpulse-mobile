@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
+import { getMapUrl } from "@/src/features/events/utils";
 import type { MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
@@ -34,7 +35,15 @@ function readOnlyRsvpLabel(event: MyEvent): string {
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ id: string; event?: string }>();
   const { session } = useSession();
-  const isLeader = session?.user.app_metadata?.role === "LEADER";
+  // Every event here is one the viewer is personally an attendee of, so
+  // RSVP is always shown; roster is additionally shown to anyone who isn't
+  // a plain Member (Leader scoped to their own assigned members, Admin
+  // seeing everyone — both already enforced server-side). Guarded on role
+  // being known yet (not just "!== MEMBER") so it defaults to hidden while
+  // this screen's own useSession() call is still resolving, rather than
+  // briefly flashing true for a Member on first render.
+  const role = session?.user.app_metadata?.role;
+  const showRoster = role !== undefined && role !== "MEMBER";
 
   const [event, setEvent] = useState<MyEvent | null>(null);
   const [parseError, setParseError] = useState(false);
@@ -68,16 +77,29 @@ export default function EventDetailScreen() {
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      <Text style={styles.meta}>{event.location_name}</Text>
-      <Text style={styles.metaSecondary}>{event.location_address}</Text>
+      {/* alignSelf: 'flex-start' keeps the tap area sized to the two text
+          lines — the ScrollView's contentContainerStyle (this Pressable's
+          parent) defaults to alignItems: 'stretch', which would otherwise
+          stretch it to the full screen width. */}
+      <Pressable
+        style={styles.locationPressable}
+        onPress={() => Linking.openURL(getMapUrl(event))}
+        testID="event-detail-map"
+      >
+        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
+        <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
+      </Pressable>
 
       <View style={styles.divider} />
 
-      {isLeader ? (
-        <RosterSection eventId={event.id} />
-      ) : (
-        <RsvpSection event={event} onEventChange={setEvent} />
-      )}
+      <RsvpSection event={event} onEventChange={setEvent} />
+
+      {showRoster ? (
+        <>
+          <View style={styles.divider} />
+          <RosterSection eventId={event.id} />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -175,6 +197,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     marginTop: 2,
+  },
+  locationPressable: {
+    alignSelf: "flex-start",
+  },
+  locationLink: {
+    color: "#2563eb",
+    textDecorationLine: "underline",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
