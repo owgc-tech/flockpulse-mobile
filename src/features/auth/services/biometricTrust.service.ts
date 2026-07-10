@@ -36,3 +36,24 @@ export async function authenticateWithBiometrics(): Promise<boolean> {
   });
   return result.success;
 }
+
+// In-memory only (module-level, not persisted) — deliberately does not
+// survive an app kill. Set right after a fresh password + TOTP login marks
+// the device trusted, so the (app) layout's gate effect — which re-mounts
+// and re-checks trust status immediately on the router.replace() that
+// follows — doesn't turn around and fire a redundant biometric prompt for
+// a session that just finished full MFA. A genuine reopen (force-quit or
+// backgrounded-long-enough) runs in a fresh JS instance where this is
+// always false, so biometric still gates normally there.
+let justAuthenticatedInSession = false;
+
+export function markJustAuthenticated(): void {
+  justAuthenticatedInSession = true;
+}
+
+// One-time skip, not a standing bypass: reading it clears it immediately.
+export function consumeJustAuthenticated(): boolean {
+  const value = justAuthenticatedInSession;
+  justAuthenticatedInSession = false;
+  return value;
+}

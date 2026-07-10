@@ -5,6 +5,7 @@ import { getTotpFactorId, verifyTotpChallenge } from "@/src/features/auth/servic
 import {
   isBiometricHardwareAvailable,
   markDeviceTrusted,
+  markJustAuthenticated,
 } from "@/src/features/auth/services/biometricTrust.service";
 import { supabase } from "@/src/lib/supabase";
 
@@ -28,6 +29,7 @@ export default function MfaVerifyScreen() {
       const hardwareAvailable = await isBiometricHardwareAvailable();
       if (hardwareAvailable) {
         await markDeviceTrusted(session.user.id);
+        markJustAuthenticated();
       }
     }
 

@@ -6,6 +6,7 @@ import { enrollTotpFactor, verifyTotpEnrollment } from "@/src/features/auth/serv
 import {
   isBiometricHardwareAvailable,
   markDeviceTrusted,
+  markJustAuthenticated,
 } from "@/src/features/auth/services/biometricTrust.service";
 import { supabase } from "@/src/lib/supabase";
 import type { TotpEnrollment } from "@/src/features/auth/types";
@@ -33,6 +34,7 @@ export default function MfaEnrollScreen() {
       const hardwareAvailable = await isBiometricHardwareAvailable();
       if (hardwareAvailable) {
         await markDeviceTrusted(session.user.id);
+        markJustAuthenticated();
       }
     }
 

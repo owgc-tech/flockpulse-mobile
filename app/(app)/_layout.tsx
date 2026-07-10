@@ -6,6 +6,7 @@ import { getAssuranceLevel, hasEnrolledTotpFactor, signOut } from "@/src/feature
 import {
   authenticateWithBiometrics,
   clearDeviceTrust,
+  consumeJustAuthenticated,
   isBiometricHardwareAvailable,
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
@@ -56,6 +57,17 @@ export default function AppLayout() {
       const trusted = await isDeviceTrusted(session.user.id);
       if (cancelled) return;
       if (!trusted) {
+        setGate({ phase: "ready" });
+        return;
+      }
+
+      // This layout re-mounts and this effect re-runs on the router.replace()
+      // that follows mfa-verify/mfa-enroll marking the device trusted — the
+      // trust flag it just wrote is already there, which would otherwise
+      // fire a redundant biometric prompt one breath after the user finished
+      // password + TOTP. Skip once for that specific transition; a genuine
+      // reopen runs in a fresh JS instance where this is never set.
+      if (consumeJustAuthenticated()) {
         setGate({ phase: "ready" });
         return;
       }
