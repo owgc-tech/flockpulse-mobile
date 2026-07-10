@@ -46,8 +46,15 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
       <Text style={styles.meta}>{formatDateTime(event.start_datetime)}</Text>
       {/* Nested Pressable, not a plain Text tap handler: RN's responder
           system gives this its own touch target, so tapping it opens the
-          map without also firing the outer card's onPress. */}
-      <Pressable onPress={() => Linking.openURL(getMapUrl(event))} testID={`event-item-map-${event.id}`}>
+          map without also firing the outer card's onPress. alignSelf:
+          'flex-start' keeps its tap area sized to the text itself — the
+          card (its parent) defaults to alignItems: 'stretch', which would
+          otherwise stretch this Pressable to the full row width. */}
+      <Pressable
+        style={styles.locationPressable}
+        onPress={() => Linking.openURL(getMapUrl(event))}
+        testID={`event-item-map-${event.id}`}
+      >
         <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
       </Pressable>
       <View style={styles.footer}>
@@ -82,6 +89,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#555",
     marginTop: 2,
+  },
+  locationPressable: {
+    alignSelf: "flex-start",
   },
   locationLink: {
     color: "#2563eb",

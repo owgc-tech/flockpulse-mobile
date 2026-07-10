@@ -77,7 +77,15 @@ export default function EventDetailScreen() {
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      <Pressable onPress={() => Linking.openURL(getMapUrl(event))} testID="event-detail-map">
+      {/* alignSelf: 'flex-start' keeps the tap area sized to the two text
+          lines — the ScrollView's contentContainerStyle (this Pressable's
+          parent) defaults to alignItems: 'stretch', which would otherwise
+          stretch it to the full screen width. */}
+      <Pressable
+        style={styles.locationPressable}
+        onPress={() => Linking.openURL(getMapUrl(event))}
+        testID="event-detail-map"
+      >
         <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
         <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
       </Pressable>
@@ -189,6 +197,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     marginTop: 2,
+  },
+  locationPressable: {
+    alignSelf: "flex-start",
   },
   locationLink: {
     color: "#2563eb",
