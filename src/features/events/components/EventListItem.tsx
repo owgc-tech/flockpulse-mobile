@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { getMapUrl } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/events/types";
 
 interface EventListItemProps {
@@ -43,7 +44,12 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
     >
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTime(event.start_datetime)}</Text>
-      <Text style={styles.meta}>{event.location_name}</Text>
+      {/* Nested Pressable, not a plain Text tap handler: RN's responder
+          system gives this its own touch target, so tapping it opens the
+          map without also firing the outer card's onPress. */}
+      <Pressable onPress={() => Linking.openURL(getMapUrl(event))} testID={`event-item-map-${event.id}`}>
+        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
+      </Pressable>
       <View style={styles.footer}>
         <View style={[styles.pill, isCancelled && styles.pillCancelled]}>
           <Text style={[styles.pillText, isCancelled && styles.pillTextCancelled]}>
@@ -76,6 +82,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#555",
     marginTop: 2,
+  },
+  locationLink: {
+    color: "#2563eb",
+    textDecorationLine: "underline",
   },
   footer: {
     flexDirection: "row",

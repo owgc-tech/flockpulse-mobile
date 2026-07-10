@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
+import { getMapUrl } from "@/src/features/events/utils";
 import type { MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
@@ -76,8 +77,10 @@ export default function EventDetailScreen() {
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      <Text style={styles.meta}>{event.location_name}</Text>
-      <Text style={styles.metaSecondary}>{event.location_address}</Text>
+      <Pressable onPress={() => Linking.openURL(getMapUrl(event))} testID="event-detail-map">
+        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
+        <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
+      </Pressable>
 
       <View style={styles.divider} />
 
@@ -186,6 +189,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     marginTop: 2,
+  },
+  locationLink: {
+    color: "#2563eb",
+    textDecorationLine: "underline",
   },
   divider: {
     height: StyleSheet.hairlineWidth,
