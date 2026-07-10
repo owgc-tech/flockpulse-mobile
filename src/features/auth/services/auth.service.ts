@@ -1,4 +1,5 @@
 import { supabase } from "@/src/lib/supabase";
+import type { Factor } from "@supabase/supabase-js";
 import type { AuthenticatorAssuranceStatus, TotpEnrollment } from "@/src/features/auth/types";
 
 // Supabase's signInWithPassword error does not distinguish between "no such
@@ -25,6 +26,21 @@ export async function hasEnrolledTotpFactor(): Promise<boolean> {
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error) throw error;
   return data.totp.some((factor) => factor.status === "verified");
+}
+
+// Unlike hasEnrolledTotpFactor()/getTotpFactorId() (verified-only), this
+// returns every TOTP factor regardless of status — needed to find and clean
+// up unverified leftovers from an abandoned enrollment attempt before
+// enrolling fresh (see mfa-enroll.tsx).
+export async function listAllTotpFactors(): Promise<Factor[]> {
+  const { data, error } = await supabase.auth.mfa.listFactors();
+  if (error) throw error;
+  return data.totp;
+}
+
+export async function unenrollFactor(factorId: string): Promise<void> {
+  const { error } = await supabase.auth.mfa.unenroll({ factorId });
+  if (error) throw error;
 }
 
 export async function enrollTotpFactor(): Promise<TotpEnrollment> {

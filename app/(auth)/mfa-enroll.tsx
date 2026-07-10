@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { MfaEnrollForm } from "@/src/features/auth/components/MfaEnrollForm";
-import { enrollTotpFactor, verifyTotpEnrollment } from "@/src/features/auth/services/auth.service";
+import {
+  enrollTotpFactor,
+  listAllTotpFactors,
+  unenrollFactor,
+  verifyTotpEnrollment,
+} from "@/src/features/auth/services/auth.service";
 import {
   isBiometricHardwareAvailable,
   markDeviceTrusted,
@@ -16,9 +21,26 @@ export default function MfaEnrollScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    enrollTotpFactor()
-      .then(setEnrollment)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to start enrollment."));
+    (async () => {
+      try {
+        // A previous enrollment attempt may have been abandoned (app closed
+        // before verifying) — Supabase creates an unverified factor
+        // server-side the moment enroll() is first called, and a fresh
+        // enroll() call fails once one already exists. Reopening this
+        // screen must always be able to start clean, so clear out any
+        // unverified leftovers before enrolling.
+        const existingFactors = await listAllTotpFactors();
+        const unverifiedFactors = existingFactors.filter((factor) => factor.status === "unverified");
+        for (const factor of unverifiedFactors) {
+          await unenrollFactor(factor.id);
+        }
+
+        const enrollment = await enrollTotpFactor();
+        setEnrollment(enrollment);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to start enrollment.");
+      }
+    })();
   }, []);
 
   const handleVerify = async (code: string) => {
