@@ -3,7 +3,6 @@ import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/e
 
 interface EventListItemProps {
   event: MyEvent;
-  showRsvpStatus: boolean;
   onPress: () => void;
 }
 
@@ -31,7 +30,7 @@ const RSVP_LABELS: Record<RsvpStatus, string> = {
   NO: "You declined",
 };
 
-export function EventListItem({ event, showRsvpStatus, onPress }: EventListItemProps) {
+export function EventListItem({ event, onPress }: EventListItemProps) {
   // FP-66 AC: cancelled events stay in the list, still tappable, still
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
@@ -51,7 +50,7 @@ export function EventListItem({ event, showRsvpStatus, onPress }: EventListItemP
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
-        {showRsvpStatus && event.rsvp_status ? (
+        {event.rsvp_status ? (
           <Text style={styles.rsvpText}>{RSVP_LABELS[event.rsvp_status]}</Text>
         ) : null}
       </View>

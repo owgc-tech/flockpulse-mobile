@@ -34,7 +34,15 @@ function readOnlyRsvpLabel(event: MyEvent): string {
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ id: string; event?: string }>();
   const { session } = useSession();
-  const isLeader = session?.user.app_metadata?.role === "LEADER";
+  // Every event here is one the viewer is personally an attendee of, so
+  // RSVP is always shown; roster is additionally shown to anyone who isn't
+  // a plain Member (Leader scoped to their own assigned members, Admin
+  // seeing everyone — both already enforced server-side). Guarded on role
+  // being known yet (not just "!== MEMBER") so it defaults to hidden while
+  // this screen's own useSession() call is still resolving, rather than
+  // briefly flashing true for a Member on first render.
+  const role = session?.user.app_metadata?.role;
+  const showRoster = role !== undefined && role !== "MEMBER";
 
   const [event, setEvent] = useState<MyEvent | null>(null);
   const [parseError, setParseError] = useState(false);
@@ -73,11 +81,14 @@ export default function EventDetailScreen() {
 
       <View style={styles.divider} />
 
-      {isLeader ? (
-        <RosterSection eventId={event.id} />
-      ) : (
-        <RsvpSection event={event} onEventChange={setEvent} />
-      )}
+      <RsvpSection event={event} onEventChange={setEvent} />
+
+      {showRoster ? (
+        <>
+          <View style={styles.divider} />
+          <RosterSection eventId={event.id} />
+        </>
+      ) : null}
     </ScrollView>
   );
 }
