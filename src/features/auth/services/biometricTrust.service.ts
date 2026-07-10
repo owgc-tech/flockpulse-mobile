@@ -1,7 +1,10 @@
 import * as SecureStore from "expo-secure-store";
 import * as LocalAuthentication from "expo-local-authentication";
 
-const trustKey = (userId: string) => `biometric_trusted:${userId}`;
+// SecureStore keys are restricted to alphanumeric, ".", "-", "_" — a colon
+// separator throws at call time (only caught by real-device testing, not
+// tsc/expo export), so use an underscore instead.
+const trustKey = (userId: string) => `biometric_trusted_${userId}`;
 
 export async function isBiometricHardwareAvailable(): Promise<boolean> {
   const [hasHardware, isEnrolled] = await Promise.all([
