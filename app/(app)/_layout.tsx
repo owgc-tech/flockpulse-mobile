@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, Slot } from "expo-router";
+import { Redirect, Stack } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signOut } from "@/src/features/auth/services/auth.service";
 import {
@@ -121,7 +121,16 @@ export default function AppLayout() {
     );
   }
 
-  return <Slot />;
+  // A real Stack (not just Slot) so the list → detail navigation (this
+  // DIP's app/(app)/events/[id].tsx) gets native back-navigation and a
+  // header — index.tsx supplies its own title/headerRight via a local
+  // <Stack.Screen options={...} />. Not a change to the gate above.
+  return (
+    <Stack>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
+    </Stack>
+  );
 }
 
 function BiometricLockScreen({
