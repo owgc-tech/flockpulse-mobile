@@ -1,0 +1,94 @@
+import { useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { MfaEnrollForm } from "@/src/features/auth/components/MfaEnrollForm";
+import { enrollTotpFactor, verifyTotpEnrollment } from "@/src/features/auth/services/auth.service";
+import {
+  isBiometricHardwareAvailable,
+  markDeviceTrusted,
+  markJustAuthenticated,
+} from "@/src/features/auth/services/biometricTrust.service";
+import { supabase } from "@/src/lib/supabase";
+import type { TotpEnrollment } from "@/src/features/auth/types";
+
+export default function MfaEnrollScreen() {
+  const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    enrollTotpFactor()
+      .then(setEnrollment)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to start enrollment."));
+  }, []);
+
+  const handleVerify = async (code: string) => {
+    if (!enrollment) return;
+    await verifyTotpEnrollment(enrollment.factorId, code);
+
+    // FP-92 item 15: on first successful aal2 login, offer trusted-device
+    // biometric unlock if the hardware supports it.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session) {
+      const hardwareAvailable = await isBiometricHardwareAvailable();
+      if (hardwareAvailable) {
+        await markDeviceTrusted(session.user.id);
+        markJustAuthenticated();
+      }
+    }
+
+    router.replace("/(app)");
+  };
+
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{error}</Text>
+      </View>
+    );
+  }
+
+  if (!enrollment) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Set Up Two-Factor Authentication</Text>
+      <MfaEnrollForm enrollment={enrollment} onVerify={handleVerify} />
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 48,
+    backgroundColor: "#fff",
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  error: {
+    color: "#c0392b",
+    fontSize: 15,
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
+});
