@@ -129,6 +129,8 @@ export default function AppLayout() {
     <Stack>
       <Stack.Screen name="index" />
       <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
+      <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
+      <Stack.Screen name="confirmations/index" options={{ title: "Confirmations" }} />
     </Stack>
   );
 }
