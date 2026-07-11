@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
+import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
@@ -59,6 +59,25 @@ export default function EventDetailScreen() {
       setParseError(true);
     }
   }, [params.event]);
+
+  // The initial event object came baked into a notification's data payload
+  // at scheduling time (or route params from the list screen) — it can be
+  // stale if the event was edited/cancelled since. Fresh-fetch on open and
+  // merge over what's already rendered so the baked-in data only ever
+  // avoids a blank flash, never what the user actually ends up seeing.
+  // getEventById() doesn't return rsvp_status/rsvp_reason (only
+  // /api/events/mine does), so spreading it over the previous state can't
+  // clobber those fields even though it runs after the initial parse.
+  useEffect(() => {
+    if (!params.id) return;
+    getEventById(params.id)
+      .then((fresh) => {
+        setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+      })
+      .catch((err) => {
+        console.warn("Failed to fresh-fetch event:", err);
+      });
+  }, [params.id]);
 
   if (parseError || !event) {
     return (

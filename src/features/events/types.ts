@@ -36,6 +36,14 @@ export interface MyEvent {
   rsvp_reason: string | null;
 }
 
+// Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
+// live against the route handler. Same base fields as MyEvent, but does NOT
+// include rsvp_status/rsvp_reason (only /api/events/mine's list response
+// appends those) — deliberately typed without them here so a fresh-fetch
+// merge (`{ ...prevEvent, ...eventDetail }`) can't accidentally clobber an
+// already-known RSVP with a missing field.
+export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason">;
+
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).
 export interface RsvpResponse {
   id: string;

@@ -1,91 +1,54 @@
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
-import { ANDROID_CHANNEL_ID } from "@/src/features/notifications/services/notifications.service";
-import { getEventRoster } from "@/src/features/events/services/events.service";
-import { fetchAttendanceWindowHours } from "@/src/features/tenant/services/tenant.service";
-import type { MyEvent } from "@/src/features/events/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { listPendingConfirmations } from "@/src/features/confirmations/services/confirmations.service";
 import type { NotificationDataPayload } from "@/src/features/notifications/types";
 
-const CONFIRMATION_PREFIX = "confirmation-";
+const LAST_CHECKED_KEY = "confirmations_last_checked_at";
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
-function confirmationIdentifier(eventId: string): string {
-  return `${CONFIRMATION_PREFIX}${eventId}`;
-}
+// FP-98, revised design: local notifications can't run code at the literal
+// moment of delivery, so there's no reliable way to precompute "will there
+// be confirmations pending" ahead of time per event (the original per-event
+// end_datetime + attendance_window_hours scheduling this replaced). Instead:
+// on every reconciliation pass (same call site as before — app open / list
+// refresh), throttled to once per 6 hours via a timestamp in AsyncStorage
+// (non-sensitive, doesn't need SecureStore), actually call
+// GET /api/confirmations/pending live. That endpoint already scopes
+// Leader-vs-Admin correctly server-side, so no client-side role/roster
+// logic is needed here at all — a non-Leader/Admin account gets a 403,
+// handled the same as "nothing pending" below. If anything comes back,
+// fire an immediate notification right then rather than scheduling one for
+// a precomputed future time.
+export async function reconcileConfirmationReminders(): Promise<void> {
+  const lastCheckedRaw = await AsyncStorage.getItem(LAST_CHECKED_KEY);
+  const lastChecked = lastCheckedRaw ? Number(lastCheckedRaw) : 0;
+  const now = Date.now();
 
-// FP-98: scoped to LEADER only (Admins have full tenant-wide confirmation
-// access anytime already — Grounding Check). Fires at end_datetime +
-// attendance_window_hours, i.e. once the self-report window actually closes
-// — not at end_datetime, which would be before any member could have
-// self-reported yet. A deliberate correction to the epic's literal wording.
-export async function reconcileConfirmationReminders(
-  events: MyEvent[],
-  role: string | undefined
-): Promise<void> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  const scheduledIdentifiers = scheduled
-    .map((request) => request.identifier)
-    .filter((id) => id.startsWith(CONFIRMATION_PREFIX));
-
-  if (role !== "LEADER") {
-    // Not a Leader: nothing should be scheduled. Also cancels anything left
-    // over from a prior session where this account did hold the Leader role.
-    await Promise.all(scheduledIdentifiers.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
+  if (now - lastChecked < CHECK_INTERVAL_MS) {
     return;
   }
 
-  const now = Date.now();
-  const attendanceWindowHours = await fetchAttendanceWindowHours();
-  const windowMs = attendanceWindowHours * 60 * 60 * 1000;
-
-  const candidates = events.filter(
-    (event) => event.effective_status === "SCHEDULED" || event.effective_status === "ACTIVE"
-  );
-
-  const pending: { event: MyEvent; fireDate: Date }[] = [];
-  for (const event of candidates) {
-    const fireMs = new Date(event.end_datetime).getTime() + windowMs;
-    if (fireMs <= now) continue;
-
-    // Eligibility reuses the existing FP-95 roster endpoint: called as the
-    // Leader, a non-empty result means they have at least one assigned
-    // member expected at this event. No new logic, no new endpoint.
-    try {
-      const roster = await getEventRoster(event.id);
-      if (roster.length > 0) {
-        pending.push({ event, fireDate: new Date(fireMs) });
-      }
-    } catch {
-      // Skip scheduling for this event rather than failing the whole
-      // reconciliation pass over one event's roster fetch failing.
-    }
-  }
-
-  const pendingIdentifiers = new Set(pending.map((p) => confirmationIdentifier(p.event.id)));
-  const toCancel = scheduledIdentifiers.filter((id) => !pendingIdentifiers.has(id));
-  await Promise.all(toCancel.map((id) => Notifications.cancelScheduledNotificationAsync(id)));
-
-  await Promise.all(
-    pending.map(async ({ event, fireDate }) => {
-      // Deliberately generic, not a live count — the same "no OS mechanism
-      // to fetch fresh content at delivery time" constraint from FP-96
-      // applies here too, doubly so since the true count can only be known
-      // by querying confirmations/pending fresh, which the tap-through
-      // screen does for real.
+  try {
+    const pending = await listPendingConfirmations();
+    if (pending.length > 0) {
       const data: NotificationDataPayload = { type: "confirmation" };
-
       await Notifications.scheduleNotificationAsync({
-        identifier: confirmationIdentifier(event.id),
         content: {
           title: "Confirmations",
           body: "You may have confirmations to review.",
           data: data as unknown as Record<string, unknown>,
         },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: fireDate,
-          ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : {}),
-        },
+        trigger: null, // null trigger = present immediately, not scheduled ahead
       });
-    })
-  );
+    }
+  } catch {
+    // Covers the expected 403 for non-Leader/Admin accounts as well as any
+    // transient failure — either way, treated the same as "checked, nothing
+    // to report" rather than surfaced as an error from a background pass.
+  } finally {
+    // Recorded regardless of outcome (pending or not, succeeded or not) —
+    // this is what makes the throttle actually throttle rather than
+    // hammering the endpoint every app open for accounts that always 403.
+    await AsyncStorage.setItem(LAST_CHECKED_KEY, String(now));
+  }
 }

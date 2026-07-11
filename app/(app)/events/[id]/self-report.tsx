@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
+import { getEventById } from "@/src/features/events/services/events.service";
 import { ApiError } from "@/src/lib/api";
 import type { MyEvent } from "@/src/features/events/types";
 
@@ -40,6 +41,23 @@ export default function SelfReportScreen() {
       setParseError(true);
     }
   }, [params.event]);
+
+  // Same staleness correction as the event detail screen: the baked-in
+  // event came from the notification's data payload at scheduling time and
+  // can be stale (edited/cancelled since) — fresh-fetch on open and merge
+  // over it, keeping the baked-in data only for the initial render so
+  // there's no blank flash. getEventById() lacks rsvp_status/rsvp_reason,
+  // so this can't clobber those fields.
+  useEffect(() => {
+    if (!params.id) return;
+    getEventById(params.id)
+      .then((fresh) => {
+        setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+      })
+      .catch((err) => {
+        console.warn("Failed to fresh-fetch event:", err);
+      });
+  }, [params.id]);
 
   const [viewState, setViewState] = useState<ViewState>("form");
   const [attended, setAttended] = useState<boolean | null>(null);
