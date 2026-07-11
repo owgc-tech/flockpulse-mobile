@@ -4,6 +4,8 @@ import { router, Stack } from "expo-router";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
+import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
+import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import type { MyEvent } from "@/src/features/events/types";
 
 export default function MyEventsScreen() {
@@ -22,6 +24,13 @@ export default function MyEventsScreen() {
     try {
       const data = await listMyEvents();
       setEvents(data);
+      // Reminder scheduling is a background enhancement, not core to
+      // rendering the list — a failure here (e.g. one event's
+      // reminder-context fetch failing) shouldn't surface as a blocking
+      // list-load error the way listMyEvents() failing does.
+      reconcileEventReminders(data).catch((err) => {
+        console.warn("Failed to reconcile event reminders:", err);
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load events.");
     } finally {
@@ -34,6 +43,7 @@ export default function MyEventsScreen() {
   // full-screen loading blink on every return to this screen). Pull-to-
   // refresh (loadEvents(true) below) is the only other way to refresh.
   useEffect(() => {
+    ensureNotificationSetup();
     loadEvents(false);
   }, [loadEvents]);
 
