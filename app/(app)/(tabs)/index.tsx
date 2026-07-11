@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router, Stack } from "expo-router";
-import { signOut } from "@/src/features/auth/services/auth.service";
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
@@ -55,11 +54,6 @@ export default function MyEventsScreen() {
     loadEvents(false);
   }, [loadEvents]);
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.replace("/(auth)/login");
-  };
-
   const handlePressEvent = (event: MyEvent) => {
     router.push({
       pathname: "/(app)/events/[id]",
@@ -69,17 +63,6 @@ export default function MyEventsScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          title: "My Events",
-          headerRight: () => (
-            <Pressable onPress={handleSignOut} testID="sign-out">
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </Pressable>
-          ),
-        }}
-      />
-
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -134,10 +117,5 @@ const styles = StyleSheet.create({
   empty: {
     fontSize: 15,
     color: "#555",
-  },
-  signOutText: {
-    color: "#2563eb",
-    fontSize: 15,
-    fontWeight: "600",
   },
 });

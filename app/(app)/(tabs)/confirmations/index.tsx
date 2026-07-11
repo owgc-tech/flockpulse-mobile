@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { Stack } from "expo-router";
 import {
   listPendingConfirmations,
   submitConfirmation,
@@ -44,8 +43,6 @@ export default function ConfirmationsScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "Confirmations" }} />
-
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />

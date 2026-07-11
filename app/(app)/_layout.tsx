@@ -121,16 +121,18 @@ export default function AppLayout() {
     );
   }
 
-  // A real Stack (not just Slot) so the list → detail navigation (this
-  // DIP's app/(app)/events/[id].tsx) gets native back-navigation and a
-  // header — index.tsx supplies its own title/headerRight via a local
-  // <Stack.Screen options={...} />. Not a change to the gate above.
+  // A Stack wrapping the (tabs) group (My Events / Confirmations, each with
+  // its own header + avatar) plus every screen that should push over the
+  // tab bar and hide it: event detail, self-report, and the profile card /
+  // edit form reached from the avatar. Not a change to the gate above —
+  // only what renders once it says "ready".
   return (
     <Stack>
-      <Stack.Screen name="index" />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
       <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
-      <Stack.Screen name="confirmations/index" options={{ title: "Confirmations" }} />
+      <Stack.Screen name="profile/index" options={{ title: "Profile" }} />
+      <Stack.Screen name="profile/edit" options={{ title: "Edit Profile" }} />
     </Stack>
   );
 }
