@@ -1,8 +1,16 @@
 import { apiFetch } from "@/src/lib/api";
-import type { MyEvent, RosterEntry, RsvpResponse, RsvpStatus } from "@/src/features/events/types";
+import type { EventDetail, MyEvent, RosterEntry, RsvpResponse, RsvpStatus } from "@/src/features/events/types";
 
 export async function listMyEvents(): Promise<MyEvent[]> {
   return apiFetch<MyEvent[]>("/api/events/mine");
+}
+
+// Fresh-fetch for the event detail / self-report screens: the event object
+// they initially render came baked into a notification's data payload at
+// scheduling time, which can go stale (edited/cancelled) by the time the
+// reminder actually fires. No role restriction server-side.
+export async function getEventById(eventId: string): Promise<EventDetail> {
+  return apiFetch<EventDetail>(`/api/events/${eventId}`);
 }
 
 // Callers can branch on err.code (RSVP_CLOSED / RSVP_REASON_REQUIRED /

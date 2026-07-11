@@ -4,7 +4,10 @@ import type { MyEvent } from "@/src/features/events/types";
 import type { NotificationDataPayload, ReminderOffset } from "@/src/features/notifications/types";
 
 const REMINDER_PREFIX = "reminder-";
-const ANDROID_CHANNEL_ID = "event-reminders";
+// Exported so FP-97/98's selfReportReminders/confirmationReminders services
+// schedule on the same Android channel this module's ensureNotificationSetup()
+// already creates once, rather than duplicating the literal string.
+export const ANDROID_CHANNEL_ID = "event-reminders";
 
 let handlerConfigured = false;
 
@@ -52,7 +55,7 @@ export async function scheduleReminder(
   title: string,
   body: string
 ): Promise<void> {
-  const data: NotificationDataPayload = { eventId: event.id, event: JSON.stringify(event) };
+  const data: NotificationDataPayload = { type: "reminder", eventId: event.id, event: JSON.stringify(event) };
 
   await Notifications.scheduleNotificationAsync({
     // Deterministic identifier: re-scheduling with the same identifier

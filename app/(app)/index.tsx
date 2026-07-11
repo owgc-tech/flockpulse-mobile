@@ -6,6 +6,8 @@ import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
+import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
+import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import type { MyEvent } from "@/src/features/events/types";
 
 export default function MyEventsScreen() {
@@ -30,6 +32,12 @@ export default function MyEventsScreen() {
       // list-load error the way listMyEvents() failing does.
       reconcileEventReminders(data).catch((err) => {
         console.warn("Failed to reconcile event reminders:", err);
+      });
+      reconcileSelfReportReminders(data).catch((err) => {
+        console.warn("Failed to reconcile self-report reminders:", err);
+      });
+      reconcileConfirmationReminders().catch((err) => {
+        console.warn("Failed to reconcile confirmation reminders:", err);
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load events.");
