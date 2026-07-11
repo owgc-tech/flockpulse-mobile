@@ -3,7 +3,7 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, T
 import { router, Stack } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
-import type { Gender, MaritalStatus } from "@/src/features/members/types";
+import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "MALE", label: "Male" },
@@ -35,6 +35,7 @@ export default function EditProfileScreen() {
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | null>(null);
   const [birthdate, setBirthdate] = useState<Date | null>(null);
   const [showIosDatePicker, setShowIosDatePicker] = useState(false);
+  const [groups, setGroups] = useState<MemberGroup[]>([]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -45,6 +46,7 @@ export default function EditProfileScreen() {
       setGender(profile.gender);
       setMaritalStatus(profile.marital_status);
       setBirthdate(profile.birthdate ? new Date(profile.birthdate) : null);
+      setGroups(profile.groups);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile.");
     } finally {
@@ -177,6 +179,27 @@ export default function EditProfileScreen() {
         />
       ) : null}
 
+      <Text style={styles.label}>Groups</Text>
+      {groups.length > 0 ? (
+        <View style={styles.groupsList}>
+          {groups.map((group) => (
+            <View key={group.id} style={styles.groupRow} testID={`edit-group-${group.id}`}>
+              <Text style={styles.groupName}>{group.name}</Text>
+              {/* Not yet functional — no backend exists yet for a member to
+                  remove themselves from a group (DELETE /api/assignments is
+                  Admin-only). Rendered visually as a fast-follow marker;
+                  deliberately no onPress rather than faking success or
+                  silently no-op'ing on tap. */}
+              <Text style={styles.groupRemoveIcon} testID={`edit-group-remove-${group.id}`}>
+                ×
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.groupsEmpty}>No groups</Text>
+      )}
+
       {error ? (
         <Text style={styles.error} testID="edit-profile-error">
           {error}
@@ -242,6 +265,33 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     color: "#fff",
+  },
+  groupsList: {
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 8,
+  },
+  groupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#eee",
+  },
+  groupName: {
+    fontSize: 15,
+    color: "#333",
+  },
+  groupRemoveIcon: {
+    fontSize: 18,
+    color: "#999",
+    paddingHorizontal: 4,
+  },
+  groupsEmpty: {
+    fontSize: 14,
+    color: "#555",
   },
   button: {
     backgroundColor: "#2563eb",

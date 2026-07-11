@@ -123,15 +123,16 @@ export default function AppLayout() {
 
   // A Stack wrapping the (tabs) group (My Events / Confirmations, each with
   // its own header + avatar) plus every screen that should push over the
-  // tab bar and hide it: event detail, self-report, and the profile card /
-  // edit form reached from the avatar. Not a change to the gate above —
-  // only what renders once it says "ready".
+  // tab bar and hide it: event detail, self-report, and the profile edit
+  // form. The Profile Card itself is no longer a route — Avatar.tsx now
+  // renders it as a positioned popover (a Modal) owned by the avatar
+  // component, not something registered here. Not a change to the gate
+  // above — only what renders once it says "ready".
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
       <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
-      <Stack.Screen name="profile/index" options={{ title: "Profile" }} />
       <Stack.Screen name="profile/edit" options={{ title: "Edit Profile" }} />
     </Stack>
   );
