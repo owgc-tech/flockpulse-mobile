@@ -1,5 +1,14 @@
 import { apiFetch } from "@/src/lib/api";
-import type { EventDetail, MyEvent, RosterEntry, RsvpResponse, RsvpStatus } from "@/src/features/events/types";
+import type {
+  CreatedEvent,
+  CreateEventInput,
+  EventDetail,
+  MyEvent,
+  PublishedEvent,
+  RosterEntry,
+  RsvpResponse,
+  RsvpStatus,
+} from "@/src/features/events/types";
 
 export async function listMyEvents(): Promise<MyEvent[]> {
   return apiFetch<MyEvent[]>("/api/events/mine");
@@ -34,4 +43,23 @@ export async function submitRsvp(
 
 export async function getEventRoster(eventId: string): Promise<RosterEntry[]> {
   return apiFetch<RosterEntry[]>(`/api/events/${eventId}/roster`);
+}
+
+// Callers can branch on err.code (MISSING_FIELD / INVALID_DATETIME /
+// INVALID_TARGET / INVALID_FORMATION_LINK / ...) via ApiError. Role-gated
+// requireRole('LEADER') server-side — Leader-tier and Admin-tier both.
+export async function createEvent(input: CreateEventInput): Promise<CreatedEvent> {
+  return apiFetch<CreatedEvent>("/api/events", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// Role-gated requireRole('ADMIN') server-side today — a Leader-tier caller
+// creating an event will get this call to 403 until FP-114 widens it (see
+// DIP-FP-115-mobile Grounding Check and this PR's description).
+export async function publishEvent(eventId: string): Promise<PublishedEvent> {
+  return apiFetch<PublishedEvent>(`/api/events/${eventId}/publish`, {
+    method: "POST",
+  });
 }

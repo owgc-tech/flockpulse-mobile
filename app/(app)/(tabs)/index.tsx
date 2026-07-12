@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { router, Tabs } from "expo-router";
+import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
@@ -9,7 +10,40 @@ import { reconcileSelfReportReminders } from "@/src/features/notifications/servi
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import type { MyEvent } from "@/src/features/events/types";
 
+// DIP-FP-115: "derived from currently-visible events or current date" — the
+// simpler of the two options offered. Scroll-position-aware tracking (via
+// FlatList's onViewableItemsChanged) would need real device scroll-behavior
+// tuning to get right; a static current-date month name doesn't.
+function currentMonthLabel(): string {
+  return new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" });
+}
+
+function EventRow({ event, onPress }: { event: MyEvent; onPress: () => void }) {
+  const start = new Date(event.start_datetime);
+  const dayOfWeek = start.toLocaleDateString(undefined, { weekday: "short" });
+  const dateNumber = start.getDate();
+
+  return (
+    <View style={styles.row}>
+      <View style={styles.dateColumn}>
+        <Text style={styles.dayOfWeek}>{dayOfWeek}</Text>
+        <Text style={styles.dateNumber}>{dateNumber}</Text>
+      </View>
+      <View style={styles.eventColumn}>
+        <EventListItem event={event} onPress={onPress} />
+      </View>
+    </View>
+  );
+}
+
 export default function MyEventsScreen() {
+  const { session } = useSession();
+  // Same inclusive pattern used everywhere else in this app — correct for
+  // any current or future role at Leader-tier or Admin-tier, not a
+  // hardcoded list of exact role values.
+  const canCreateEvent = session?.user.app_metadata?.role !== undefined
+    && session.user.app_metadata.role !== "MEMBER";
+
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -63,6 +97,31 @@ export default function MyEventsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* headerTitle cleared and headerLeft supplies the month name +
+          (currently non-functional, flagged) hamburger icon — headerRight
+          (avatar) stays whatever (tabs)/_layout.tsx's shared screenOptions
+          already supplies, untouched here. */}
+      <Tabs.Screen
+        options={{
+          headerTitle: () => null,
+          headerLeft: () => (
+            <View style={styles.headerLeft}>
+              {/* No drawer/menu content specified anywhere — placeholder
+                  tap target only, flagged as incomplete rather than
+                  silently wired to nothing or faking a working menu. */}
+              <Pressable
+                style={styles.menuButton}
+                onPress={() => console.warn("Menu not yet implemented")}
+                testID="menu-button"
+              >
+                <Text style={styles.menuIcon}>☰</Text>
+              </Pressable>
+              <Text style={styles.monthLabel}>{currentMonthLabel()}</Text>
+            </View>
+          ),
+        }}
+      />
+
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -85,10 +144,20 @@ export default function MyEventsScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <EventListItem event={item} onPress={() => handlePressEvent(item)} />
+            <EventRow event={item} onPress={() => handlePressEvent(item)} />
           )}
         />
       )}
+
+      {canCreateEvent ? (
+        <Pressable
+          style={styles.fab}
+          onPress={() => router.push("/(app)/events/create")}
+          testID="create-event-fab"
+        >
+          <Text style={styles.fabIcon}>+</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -98,9 +167,47 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 8,
+    gap: 10,
+  },
+  menuButton: {
+    padding: 4,
+  },
+  menuIcon: {
+    fontSize: 20,
+  },
+  monthLabel: {
+    fontSize: 17,
+    fontWeight: "700",
+  },
   listContent: {
     padding: 16,
     flexGrow: 1,
+  },
+  row: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  dateColumn: {
+    width: "15%",
+    alignItems: "center",
+    paddingTop: 16,
+  },
+  dayOfWeek: {
+    fontSize: 12,
+    color: "#777",
+    textTransform: "uppercase",
+  },
+  dateNumber: {
+    fontSize: 18,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  eventColumn: {
+    width: "85%",
   },
   center: {
     flex: 1,
@@ -117,5 +224,27 @@ const styles = StyleSheet.create({
   empty: {
     fontSize: 15,
     color: "#555",
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  fabIcon: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "600",
+    lineHeight: 30,
   },
 });

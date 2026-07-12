@@ -65,3 +65,50 @@ export interface RosterEntry {
   response: RosterResponseValue;
   rsvp_reason: string | null;
 }
+
+// Matches flockpulse-web's POST /api/events request body exactly — the
+// outer body is camelCase, but confirmed live that target/foodAssignment's
+// *inner* keys stay snake_case (group_ids/member_ids), same shape as
+// EventTargetSelector above.
+export interface CreateEventInput {
+  eventTypeId: string;
+  name: string;
+  startDatetime: string;
+  endDatetime: string;
+  locationName: string;
+  locationAddress: string;
+  locationUrl?: string;
+  target: EventTargetSelector;
+  talkId?: string;
+  prayerLeaderMemberId?: string;
+  foodAssignment?: EventTargetSelector;
+}
+
+// POST /api/events success response — confirmed live. status is always
+// 'DRAFT' (hardcoded server-side in insert_event_with_audit).
+export interface CreatedEvent {
+  id: string;
+  name: string;
+  status: EventStatus;
+  start_datetime: string;
+  end_datetime: string;
+  location_name: string;
+  location_address: string;
+  location_url: string | null;
+  target: EventTargetSelector;
+  talk_id: string | null;
+  prayer_leader_member_id: string | null;
+  food_assignment: EventTargetSelector | null;
+  created_at: string;
+  created_by_member_id: string;
+}
+
+// POST /api/events/:id/publish success response — confirmed live, a
+// smaller field set than CreatedEvent. status is 'SCHEDULED' on success.
+export interface PublishedEvent {
+  id: string;
+  name: string;
+  status: EventStatus;
+  start_datetime: string;
+  end_datetime: string;
+}
