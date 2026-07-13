@@ -1,12 +1,68 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
+import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
+import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
-import type { MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type { EventDetail, EventTargetSelector, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type { EventReminderFormation } from "@/src/features/notifications/types";
+
+// GET /api/members / GET /api/groups response rows, filtered down via
+// ?id= — same shape as MemberGroupPicker's unfiltered fetch of the same two
+// endpoints, kept local and untyped-for-export for the same reason: this
+// screen is the only consumer of the filtered form.
+interface MemberLookupRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
+interface GroupLookupRow {
+  id: string;
+  name: string;
+}
+
+// Resolves food_assignment's group_ids/member_ids into display names.
+// Each id is looked up independently via Promise.allSettled (not
+// Promise.all) so one bad id — e.g. a group that's since been soft-deleted —
+// only drops that one name from the list rather than failing the whole
+// Food Assignment section.
+async function resolveFoodAssignmentNames(assignment: EventTargetSelector): Promise<string> {
+  const groupIds = assignment.group_ids ?? [];
+  const memberIds = assignment.member_ids ?? [];
+
+  const [groupSettled, memberSettled] = await Promise.all([
+    Promise.allSettled(groupIds.map((id) => apiFetch<GroupLookupRow>(`/api/groups?id=${id}`))),
+    Promise.allSettled(memberIds.map((id) => apiFetch<MemberLookupRow>(`/api/members?id=${id}`))),
+  ]);
+
+  const groupNames = groupSettled
+    .filter((r): r is PromiseFulfilledResult<GroupLookupRow> => r.status === "fulfilled")
+    .map((r) => r.value?.name)
+    .filter((name): name is string => Boolean(name));
+
+  const memberNames = memberSettled
+    .filter((r): r is PromiseFulfilledResult<MemberLookupRow> => r.status === "fulfilled")
+    .map((r) => r.value)
+    .filter((row): row is MemberLookupRow => Boolean(row))
+    .map((row) => `${row.first_name} ${row.last_name}`);
+
+  return [...groupNames, ...memberNames].join(", ");
+}
+
+// This screen's local state needs both MyEvent's rsvp_status/rsvp_reason
+// (present on the initial route-param object, which is MyEvent-shaped) and
+// EventDetail's talk_id/created_by_member_id (only present after the
+// fresh-fetch below resolves and merges in) — EventDetail itself represents
+// the endpoint's actual complete, always-present response shape (see its doc
+// comment), so those two fields are Partial'd here to reflect that this
+// component's own state may not have them yet.
+type ScreenEvent = MyEvent & Partial<Pick<EventDetail, "talk_id" | "created_by_member_id">>;
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -24,7 +80,7 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
 // Member-branch read-only copy when RSVP controls aren't editable
 // (effective_status !== 'SCHEDULED'): distinguishes "hasn't opened yet" from
 // "already closed" rather than showing one generic message either way.
-function readOnlyRsvpLabel(event: MyEvent): string {
+function readOnlyRsvpLabel(event: ScreenEvent): string {
   if (event.rsvp_status === "YES") return "You responded: Going";
   if (event.rsvp_status === "NO") {
     return event.rsvp_reason ? `You responded: Not going — ${event.rsvp_reason}` : "You responded: Not going";
@@ -45,8 +101,17 @@ export default function EventDetailScreen() {
   const role = session?.user.app_metadata?.role;
   const showRoster = role !== undefined && role !== "MEMBER";
 
-  const [event, setEvent] = useState<MyEvent | null>(null);
+  const [event, setEvent] = useState<ScreenEvent | null>(null);
   const [parseError, setParseError] = useState(false);
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [prayerLeaderName, setPrayerLeaderName] = useState<string | null>(null);
+  const [foodAssignmentNames, setFoodAssignmentNames] = useState<string | null>(null);
+  const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
+  // Distinguishes "still fetching" from "fetched, nothing to show" (e.g. the
+  // prayer leader lookup rejected outright) — without this, a rejected
+  // lookup would leave its section reading "Loading…" forever instead of
+  // settling on a final answer.
+  const [contextLookupsSettled, setContextLookupsSettled] = useState(false);
 
   useEffect(() => {
     if (!params.event) {
@@ -54,11 +119,29 @@ export default function EventDetailScreen() {
       return;
     }
     try {
-      setEvent(JSON.parse(params.event) as MyEvent);
+      // The initial object is MyEvent-shaped (list-screen tap or
+      // notification payload) — it never has created_by_member_id, only the
+      // fresh-fetch below does. Cast is safe: it's simply absent until the
+      // merge below adds it.
+      setEvent(JSON.parse(params.event) as ScreenEvent);
     } catch {
       setParseError(true);
     }
   }, [params.event]);
+
+  // DIP-FP-115-mobile-nav-calendar-edit: needed for the ownership half of
+  // the Edit-button gate below. No caching, same rationale as Avatar.tsx's
+  // fetchMyProfile() call — this screen is opened infrequently enough that
+  // an always-fresh network hit is cheap and avoids a stale-role/group bug
+  // class entirely.
+  useEffect(() => {
+    fetchMyProfile()
+      .then((profile) => setMyProfileId(profile.id))
+      .catch(() => {
+        // Leave canEdit's ownership branch resolved as "unknown" rather
+        // than blocking the whole screen over a failed profile fetch.
+      });
+  }, []);
 
   // The initial event object came baked into a notification's data payload
   // at scheduling time (or route params from the list screen) — it can be
@@ -79,6 +162,38 @@ export default function EventDetailScreen() {
       });
   }, [params.id]);
 
+  // Prayer Leader / Food Assignment / Formation Talk are three independent
+  // lookups — Promise.allSettled (not sequential awaits) so one failing
+  // (e.g. a soft-deleted group behind food_assignment) can't blank the
+  // other two, same defensive pattern as myProfileId above. talk_id isn't
+  // present on the initial MyEvent-shaped object (only after the
+  // fresh-fetch merge above resolves), so this naturally re-runs once that
+  // merge lands and picks up the Formation Talk lookup at that point.
+  useEffect(() => {
+    if (!event) return;
+    setContextLookupsSettled(false);
+
+    Promise.allSettled([
+      event.prayer_leader_member_id
+        ? apiFetch<MemberLookupRow>(`/api/members?id=${event.prayer_leader_member_id}`)
+        : Promise.resolve(null),
+      event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
+      event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
+    ]).then(([prayerResult, foodResult, talkResult]) => {
+      if (prayerResult.status === "fulfilled" && prayerResult.value) {
+        const member = prayerResult.value;
+        setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
+      }
+      if (foodResult.status === "fulfilled" && foodResult.value) {
+        setFoodAssignmentNames(foodResult.value);
+      }
+      if (talkResult.status === "fulfilled" && talkResult.value?.formation) {
+        setFormationTalk(talkResult.value.formation);
+      }
+      setContextLookupsSettled(true);
+    });
+  }, [event?.id, event?.prayer_leader_member_id, event?.food_assignment, event?.talk_id]);
+
   if (parseError || !event) {
     return (
       <View style={styles.center}>
@@ -90,9 +205,42 @@ export default function EventDetailScreen() {
     );
   }
 
+  // DIP-FP-115-mobile-nav-calendar-edit Grounding Check formula: Admin-tier
+  // can edit any event; everyone else only their own. created_by_member_id
+  // is undefined until the fresh-fetch above resolves, and myProfileId is
+  // null until its own fetch resolves — canEdit stays false (button hidden,
+  // not flashed-then-hidden) until both are known, same defensive pattern
+  // used for showRoster above. Real enforcement is server-side regardless
+  // (see updateEvent's doc comment) — this only controls whether the button
+  // renders.
+  const isAdminTier = role === "ADMIN";
+  const canEdit =
+    role !== undefined &&
+    event.created_by_member_id !== undefined &&
+    myProfileId !== null &&
+    (isAdminTier || event.created_by_member_id === myProfileId);
+
+  const handleEditPress = () => {
+    router.push({
+      pathname: "/(app)/events/[id]/edit",
+      params: { id: event.id, event: JSON.stringify(event) },
+    });
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: event.name }} />
+      <Stack.Screen
+        options={{
+          title: event.name,
+          headerRight: canEdit
+            ? () => (
+                <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </Pressable>
+              )
+            : undefined,
+        }}
+      />
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
@@ -108,6 +256,50 @@ export default function EventDetailScreen() {
         <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
         <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
       </Pressable>
+
+      <View style={styles.divider} />
+
+      {event.prayer_leader_member_id ? (
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Prayer Leader</Text>
+          <Text style={styles.fieldValue}>
+            {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
+          </Text>
+        </View>
+      ) : null}
+
+      {event.food_assignment ? (
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Food Assignment</Text>
+          <Text style={styles.fieldValue}>
+            {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
+          </Text>
+        </View>
+      ) : null}
+
+      {/* talk_id is undefined (not yet fetched) briefly before the
+          fresh-fetch merge above resolves, then either a string or
+          explicit null — only null (confirmed no talk) hides this
+          section outright; undefined still renders it in a loading state. */}
+      {event.talk_id !== null ? (
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Formation Talk</Text>
+          {formationTalk ? (
+            <>
+              <Text style={styles.fieldValue}>
+                {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
+              </Text>
+              {formationTalk.talk_description ? (
+                <Text style={styles.metaSecondary}>{formationTalk.talk_description}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.metaSecondary}>
+              {contextLookupsSettled ? "Not available" : "Loading…"}
+            </Text>
+          )}
+        </View>
+      ) : null}
 
       <View style={styles.divider} />
 
@@ -127,8 +319,8 @@ function RsvpSection({
   event,
   onEventChange,
 }: {
-  event: MyEvent;
-  onEventChange: (event: MyEvent) => void;
+  event: ScreenEvent;
+  onEventChange: (event: ScreenEvent) => void;
 }) {
   const editable = event.effective_status === "SCHEDULED";
 
@@ -178,7 +370,7 @@ function RosterSection({ eventId }: { eventId: string }) {
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Roster</Text>
+      <Text style={styles.sectionTitle}>Invitees</Text>
       {error ? (
         <Text style={styles.error}>{error}</Text>
       ) : !roster ? (
@@ -195,6 +387,22 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#fff",
     flexGrow: 1,
+  },
+  editButton: {
+    marginRight: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#eff6ff",
+    minWidth: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  editButtonText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
   },
   center: {
     flex: 1,
@@ -233,6 +441,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     marginBottom: 8,
+  },
+  fieldGroup: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  fieldValue: {
+    fontSize: 15,
+    color: "#333",
   },
   error: {
     color: "#c0392b",
