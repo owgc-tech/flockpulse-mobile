@@ -260,18 +260,18 @@ export default function EventDetailScreen() {
       <View style={styles.divider} />
 
       {event.prayer_leader_member_id ? (
-        <View>
-          <Text style={styles.sectionTitle}>Prayer Leader</Text>
-          <Text style={styles.meta}>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Prayer Leader</Text>
+          <Text style={styles.fieldValue}>
             {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
           </Text>
         </View>
       ) : null}
 
       {event.food_assignment ? (
-        <View>
-          <Text style={styles.sectionTitle}>Food Assignment</Text>
-          <Text style={styles.meta}>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Food Assignment</Text>
+          <Text style={styles.fieldValue}>
             {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
           </Text>
         </View>
@@ -282,11 +282,11 @@ export default function EventDetailScreen() {
           explicit null — only null (confirmed no talk) hides this
           section outright; undefined still renders it in a loading state. */}
       {event.talk_id !== null ? (
-        <View>
-          <Text style={styles.sectionTitle}>Formation Talk</Text>
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Formation Talk</Text>
           {formationTalk ? (
             <>
-              <Text style={styles.meta}>
+              <Text style={styles.fieldValue}>
                 {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
               </Text>
               {formationTalk.talk_description ? (
@@ -390,8 +390,11 @@ const styles = StyleSheet.create({
   },
   editButton: {
     marginRight: 16,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#eff6ff",
+    minWidth: 56,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -399,6 +402,7 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontSize: 15,
     fontWeight: "600",
+    textAlign: "center",
   },
   center: {
     flex: 1,
@@ -437,6 +441,18 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: "700",
     marginBottom: 8,
+  },
+  fieldGroup: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  fieldValue: {
+    fontSize: 15,
+    color: "#333",
   },
   error: {
     color: "#c0392b",
