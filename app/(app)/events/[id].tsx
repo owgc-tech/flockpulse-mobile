@@ -1,13 +1,59 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
+import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
+import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
-import type { EventDetail, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type { EventDetail, EventTargetSelector, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type { EventReminderFormation } from "@/src/features/notifications/types";
+
+// GET /api/members / GET /api/groups response rows, filtered down via
+// ?id= — same shape as MemberGroupPicker's unfiltered fetch of the same two
+// endpoints, kept local and untyped-for-export for the same reason: this
+// screen is the only consumer of the filtered form.
+interface MemberLookupRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
+interface GroupLookupRow {
+  id: string;
+  name: string;
+}
+
+// Resolves food_assignment's group_ids/member_ids into display names.
+// Each id is looked up independently via Promise.allSettled (not
+// Promise.all) so one bad id — e.g. a group that's since been soft-deleted —
+// only drops that one name from the list rather than failing the whole
+// Food Assignment section.
+async function resolveFoodAssignmentNames(assignment: EventTargetSelector): Promise<string> {
+  const groupIds = assignment.group_ids ?? [];
+  const memberIds = assignment.member_ids ?? [];
+
+  const [groupSettled, memberSettled] = await Promise.all([
+    Promise.allSettled(groupIds.map((id) => apiFetch<GroupLookupRow[]>(`/api/groups?id=${id}`))),
+    Promise.allSettled(memberIds.map((id) => apiFetch<MemberLookupRow[]>(`/api/members?id=${id}`))),
+  ]);
+
+  const groupNames = groupSettled
+    .filter((r): r is PromiseFulfilledResult<GroupLookupRow[]> => r.status === "fulfilled")
+    .map((r) => r.value[0]?.name)
+    .filter((name): name is string => Boolean(name));
+
+  const memberNames = memberSettled
+    .filter((r): r is PromiseFulfilledResult<MemberLookupRow[]> => r.status === "fulfilled")
+    .map((r) => r.value[0])
+    .filter((row): row is MemberLookupRow => Boolean(row))
+    .map((row) => `${row.first_name} ${row.last_name}`);
+
+  return [...groupNames, ...memberNames].join(", ");
+}
 
 // This screen's local state needs both MyEvent's rsvp_status/rsvp_reason
 // (present on the initial route-param object, which is MyEvent-shaped) and
@@ -58,6 +104,14 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<ScreenEvent | null>(null);
   const [parseError, setParseError] = useState(false);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
+  const [prayerLeaderName, setPrayerLeaderName] = useState<string | null>(null);
+  const [foodAssignmentNames, setFoodAssignmentNames] = useState<string | null>(null);
+  const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
+  // Distinguishes "still fetching" from "fetched, nothing to show" (e.g. the
+  // prayer leader lookup rejected outright) — without this, a rejected
+  // lookup would leave its section reading "Loading…" forever instead of
+  // settling on a final answer.
+  const [contextLookupsSettled, setContextLookupsSettled] = useState(false);
 
   useEffect(() => {
     if (!params.event) {
@@ -107,6 +161,37 @@ export default function EventDetailScreen() {
         console.warn("Failed to fresh-fetch event:", err);
       });
   }, [params.id]);
+
+  // Prayer Leader / Food Assignment / Formation Talk are three independent
+  // lookups — Promise.allSettled (not sequential awaits) so one failing
+  // (e.g. a soft-deleted group behind food_assignment) can't blank the
+  // other two, same defensive pattern as myProfileId above. talk_id isn't
+  // present on the initial MyEvent-shaped object (only after the
+  // fresh-fetch merge above resolves), so this naturally re-runs once that
+  // merge lands and picks up the Formation Talk lookup at that point.
+  useEffect(() => {
+    if (!event) return;
+
+    Promise.allSettled([
+      event.prayer_leader_member_id
+        ? apiFetch<MemberLookupRow[]>(`/api/members?id=${event.prayer_leader_member_id}`)
+        : Promise.resolve(null),
+      event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
+      event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
+    ]).then(([prayerResult, foodResult, talkResult]) => {
+      if (prayerResult.status === "fulfilled" && prayerResult.value?.[0]) {
+        const member = prayerResult.value[0];
+        setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
+      }
+      if (foodResult.status === "fulfilled" && foodResult.value) {
+        setFoodAssignmentNames(foodResult.value);
+      }
+      if (talkResult.status === "fulfilled" && talkResult.value?.formation) {
+        setFormationTalk(talkResult.value.formation);
+      }
+      setContextLookupsSettled(true);
+    });
+  }, [event?.id, event?.prayer_leader_member_id, event?.food_assignment, event?.talk_id]);
 
   if (parseError || !event) {
     return (
@@ -174,6 +259,57 @@ export default function EventDetailScreen() {
       <View style={styles.divider} />
 
       <RsvpSection event={event} onEventChange={setEvent} />
+
+      {event.prayer_leader_member_id ? (
+        <>
+          <View style={styles.divider} />
+          <View>
+            <Text style={styles.sectionTitle}>Prayer Leader</Text>
+            <Text style={styles.meta}>
+              {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
+            </Text>
+          </View>
+        </>
+      ) : null}
+
+      {event.food_assignment ? (
+        <>
+          <View style={styles.divider} />
+          <View>
+            <Text style={styles.sectionTitle}>Food Assignment</Text>
+            <Text style={styles.meta}>
+              {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
+            </Text>
+          </View>
+        </>
+      ) : null}
+
+      {/* talk_id is undefined (not yet fetched) briefly before the
+          fresh-fetch merge above resolves, then either a string or
+          explicit null — only null (confirmed no talk) hides this
+          section outright; undefined still renders it in a loading state. */}
+      {event.talk_id !== null ? (
+        <>
+          <View style={styles.divider} />
+          <View>
+            <Text style={styles.sectionTitle}>Formation Talk</Text>
+            {formationTalk ? (
+              <>
+                <Text style={styles.meta}>
+                  {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
+                </Text>
+                {formationTalk.talk_description ? (
+                  <Text style={styles.metaSecondary}>{formationTalk.talk_description}</Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={styles.metaSecondary}>
+                {contextLookupsSettled ? "Not available" : "Loading…"}
+              </Text>
+            )}
+          </View>
+        </>
+      ) : null}
 
       {showRoster ? (
         <>

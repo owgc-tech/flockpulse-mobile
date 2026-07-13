@@ -13,7 +13,6 @@ import { router, Stack } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
-import { NavMenu } from "@/src/features/navigation/components/NavMenu";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
@@ -47,13 +46,21 @@ function groupEventsByMonth(events: MyEvent[]): EventSection[] {
   return sections;
 }
 
-function EventRow({ event, onPress }: { event: MyEvent; onPress: () => void }) {
+function EventRow({
+  event,
+  onPress,
+  onLayout,
+}: {
+  event: MyEvent;
+  onPress: () => void;
+  onLayout: (height: number) => void;
+}) {
   const start = new Date(event.start_datetime);
   const dayOfWeek = start.toLocaleDateString(undefined, { weekday: "short" });
   const dateNumber = start.getDate();
 
   return (
-    <View style={styles.row}>
+    <View style={styles.row} onLayout={(e) => onLayout(e.nativeEvent.layout.height)}>
       <View style={styles.dateColumn}>
         <Text style={styles.dayOfWeek}>{dayOfWeek}</Text>
         <Text style={styles.dateNumber}>{dateNumber}</Text>
@@ -64,6 +71,22 @@ function EventRow({ event, onPress }: { event: MyEvent; onPress: () => void }) {
     </View>
   );
 }
+
+// DIP Grounding Check: EventRow's height isn't fixed — event.name and
+// location_name both wrap unbounded, so a two-line name plus a wrapped
+// location can make one row noticeably taller than another. Rather than
+// guess a single static row height for getItemLayout (wrong for any row
+// that wraps), track real measured heights per row via onLayout and fall
+// back to this estimate only for rows that haven't rendered/measured yet —
+// self-correcting as more of the list gets measured, with
+// onScrollToIndexFailed below as the safety net for jumps that land on a
+// still-unmeasured section.
+const ESTIMATED_ROW_HEIGHT = 140;
+// sectionHeader's style is fixed padding (10 top + 10 bottom) plus one
+// line of 15px bold text — genuinely static, unlike rows, but still
+// measured once via onLayout rather than hand-computed from the
+// stylesheet, so it can't silently drift out of sync with styles.sectionHeader.
+const ESTIMATED_SECTION_HEADER_HEIGHT = 41;
 
 export default function MyEventsScreen() {
   const { session } = useSession();
@@ -82,6 +105,55 @@ export default function MyEventsScreen() {
 
   const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
   const sections = useMemo(() => groupEventsByMonth(events), [events]);
+
+  // Measured heights, keyed by event id (rows) — a single ref for the
+  // section header since its height is uniform across sections. `layoutTick`
+  // forces the itemLayouts memo below to recompute after a measurement comes
+  // in (refs alone don't trigger a re-render).
+  const rowHeightsRef = useRef<Map<string, number>>(new Map());
+  const sectionHeaderHeightRef = useRef<number | null>(null);
+  const [layoutTick, setLayoutTick] = useState(0);
+
+  const handleRowLayout = useCallback((eventId: string, height: number) => {
+    if (rowHeightsRef.current.get(eventId) === height) return;
+    rowHeightsRef.current.set(eventId, height);
+    setLayoutTick((t) => t + 1);
+  }, []);
+
+  const handleSectionHeaderLayout = useCallback((height: number) => {
+    if (sectionHeaderHeightRef.current === height) return;
+    sectionHeaderHeightRef.current = height;
+    setLayoutTick((t) => t + 1);
+  }, []);
+
+  // Flattens sections into the same [header, item, item, ..., header, item,
+  // ...] index order SectionList's own internal VirtualizedList uses, so
+  // getItemLayout below can just index into it directly.
+  const itemLayouts = useMemo(() => {
+    const layouts: { length: number; offset: number }[] = [];
+    let offset = 0;
+    const headerHeight = sectionHeaderHeightRef.current ?? ESTIMATED_SECTION_HEADER_HEIGHT;
+
+    for (const section of sections) {
+      layouts.push({ length: headerHeight, offset });
+      offset += headerHeight;
+      for (const item of section.data) {
+        const rowHeight = rowHeightsRef.current.get(item.id) ?? ESTIMATED_ROW_HEIGHT;
+        layouts.push({ length: rowHeight, offset });
+        offset += rowHeight;
+      }
+    }
+    return layouts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, layoutTick]);
+
+  const getItemLayout = useCallback(
+    (_data: unknown, index: number) => {
+      const layout = itemLayouts[index] ?? { length: ESTIMATED_ROW_HEIGHT, offset: ESTIMATED_ROW_HEIGHT * index };
+      return { ...layout, index };
+    },
+    [itemLayouts]
+  );
 
   // Sets the initial dropdown label once data loads, without overriding
   // whatever the scroll-sync callback below has already moved it to on a
@@ -152,11 +224,17 @@ export default function MyEventsScreen() {
     });
   };
 
+  // Remembers the last requested target so onScrollToIndexFailed (below) can
+  // retry the same destination — its failure callback only gets a flattened
+  // list index, not the sectionIndex/itemIndex pair scrollToLocation needs.
+  const pendingScrollRef = useRef<{ sectionIndex: number; itemIndex: number } | null>(null);
+
   const handleSelectMonth = (section: EventSection) => {
     const sectionIndex = sections.findIndex((s) => s.key === section.key);
     if (sectionIndex === -1) return;
     setIsMonthPickerOpen(false);
     setCurrentMonthLabel(section.title);
+    pendingScrollRef.current = { sectionIndex, itemIndex: 0 };
     sectionListRef.current?.scrollToLocation({
       sectionIndex,
       itemIndex: 0,
@@ -165,18 +243,37 @@ export default function MyEventsScreen() {
     });
   };
 
+  // DIP Grounding Check: jumping to a distant month lands on rows that have
+  // never rendered, so getItemLayout's answer for them is necessarily still
+  // the estimate, not a measured height — accurate enough for VirtualizedList
+  // to attempt the scroll, but not always enough for it to land exactly on
+  // the target. Retrying after a short delay gives the list a chance to
+  // render nearby content (and this same handler fire again if it's still
+  // off) rather than leaving the user stranded mid-scroll.
+  const handleScrollToIndexFailed = useCallback(() => {
+    const pending = pendingScrollRef.current;
+    if (!pending) return;
+    setTimeout(() => {
+      sectionListRef.current?.scrollToLocation({
+        sectionIndex: pending.sectionIndex,
+        itemIndex: pending.itemIndex,
+        animated: true,
+        viewPosition: 0,
+      });
+    }, 150);
+  }, []);
+
   return (
     <View style={styles.container}>
-      {/* headerTitle cleared and headerLeft supplies the real hamburger nav
-          menu + a tappable, scroll-synced month dropdown — headerRight
-          (avatar) stays whatever (tabs)/_layout.tsx's shared screenOptions
-          already supplies, untouched here. */}
+      {/* headerTitle cleared and headerLeft supplies a tappable,
+          scroll-synced month dropdown — headerRight (avatar) stays whatever
+          (tabs)/_layout.tsx's shared screenOptions already supplies,
+          untouched here. */}
       <Stack.Screen
         options={{
           headerTitle: () => null,
           headerLeft: () => (
             <View style={styles.headerLeft}>
-              <NavMenu />
               <Pressable
                 style={styles.monthPressable}
                 onPress={() => setIsMonthPickerOpen(true)}
@@ -239,6 +336,8 @@ export default function MyEventsScreen() {
           stickySectionHeadersEnabled
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
+          getItemLayout={getItemLayout}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={() => loadEvents(true)} />
           }
@@ -248,12 +347,19 @@ export default function MyEventsScreen() {
             </View>
           }
           renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
+            <View
+              style={styles.sectionHeader}
+              onLayout={(e) => handleSectionHeaderLayout(e.nativeEvent.layout.height)}
+            >
               <Text style={styles.sectionHeaderText}>{section.title}</Text>
             </View>
           )}
           renderItem={({ item }) => (
-            <EventRow event={item} onPress={() => handlePressEvent(item)} />
+            <EventRow
+              event={item}
+              onPress={() => handlePressEvent(item)}
+              onLayout={(height) => handleRowLayout(item.id, height)}
+            />
           )}
         />
       )}
