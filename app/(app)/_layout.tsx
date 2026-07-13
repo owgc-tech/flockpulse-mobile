@@ -166,10 +166,25 @@ export default function AppLayout() {
   // relevant name/heading) covers that. (tabs)'s own _layout.tsx handles
   // its two screens' headers separately, including preserving their bottom
   // tab bar labels via tabBarLabel.
+  //
+  // FP-118 Grounding Check: omitting `title` isn't the same as guaranteeing
+  // a blank header — React Navigation falls back to the raw route segment
+  // name (the exact "(tabs)"-as-literal-text bug from the FP-115 round,
+  // fixed there with headerBackButtonDisplayMode: "minimal" on just that
+  // one screen) when no title is available anywhere in the chain. Two
+  // explicit defaults close that off for all five pushed screens at once,
+  // rather than leaving it to omission: screenOptions' headerTitle forces
+  // every header's title area genuinely blank regardless of segment-name
+  // fallback, and headerBackButtonDisplayMode forces every back button
+  // icon-only regardless of what the previous screen's (now also blank)
+  // title would otherwise resolve to for the back label. Centralized here
+  // rather than repeated per-screen since none of these five screens need a
+  // different value — Event Detail's own Stack.Screen below only adds
+  // headerRight, which is genuinely screen-owned (depends on canEdit).
   return (
     <View style={styles.appShell}>
       <CommunityBanner />
-      <Stack>
+      <Stack screenOptions={{ headerTitle: () => null, headerBackButtonDisplayMode: "minimal" }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="events/[id]" />
         <Stack.Screen name="events/[id]/self-report" />

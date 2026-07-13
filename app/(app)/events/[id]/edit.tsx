@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import {
@@ -328,8 +328,6 @@ export default function EditEventScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ headerBackButtonDisplayMode: "minimal" }} />
-
       <Text style={styles.label}>Name</Text>
       <TextInput
         style={styles.input}
