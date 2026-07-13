@@ -333,7 +333,6 @@ export default function MyEventsScreen() {
           contentContainerStyle={styles.listContent}
           sections={sections}
           keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
           getItemLayout={getItemLayout}
