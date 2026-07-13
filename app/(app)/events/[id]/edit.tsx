@@ -13,13 +13,16 @@ import {
 } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { updateEvent } from "@/src/features/events/services/events.service";
+import { listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import {
   formationDisplayName,
   listCourses,
   listModules,
   listTalks,
 } from "@/src/features/formation/services/formation.service";
+import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
+import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
+import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
@@ -295,6 +298,24 @@ export default function EditEventScreen() {
         foodAssignment:
           foodAssignment.group_ids.length || foodAssignment.member_ids.length ? foodAssignment : null,
       });
+
+      // FP-96-FP-97-adj-1: My Events' own mount effect (where reconciliation
+      // normally runs) deliberately doesn't refetch on focus, so without
+      // this, an edited event's self-report/event reminders would never get
+      // rescheduled until the next cold app relaunch or manual pull-to-
+      // refresh. Passing the full fetched list (not just this one event)
+      // matters — both reconcile functions cancel any already-scheduled
+      // reminder whose identifier isn't in the list they're given, so a
+      // single-event array would wrongly cancel every other event's
+      // reminders.
+      const freshEvents = await listMyEvents();
+      reconcileEventReminders(freshEvents).catch((err) => console.warn("Failed to reconcile event reminders:", err));
+      reconcileSelfReportReminders(freshEvents).catch((err) =>
+        console.warn("Failed to reconcile self-report reminders:", err)
+      );
+      reconcileConfirmationReminders().catch((err) =>
+        console.warn("Failed to reconcile confirmation reminders:", err)
+      );
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update event.");

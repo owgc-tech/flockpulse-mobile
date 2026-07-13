@@ -13,8 +13,11 @@ import {
 } from "react-native";
 import { router, Stack } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { createEvent, publishEvent } from "@/src/features/events/services/events.service";
+import { createEvent, listMyEvents, publishEvent } from "@/src/features/events/services/events.service";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
+import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
+import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
+import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import {
   formationDisplayName,
   listCourses,
@@ -291,6 +294,24 @@ export default function CreateEventScreen() {
       // creation flow, not a separate draft-review step. Flagged as a UX
       // default in the DIP, not a spec requirement.
       await publishEvent(created.id);
+
+      // FP-96-FP-97-adj-1: My Events' own mount effect (where reconciliation
+      // normally runs) deliberately doesn't refetch on focus, so without
+      // this, a newly created event's self-report/event reminders would
+      // never get scheduled until the next cold app relaunch or manual
+      // pull-to-refresh. Passing the full fetched list (not just `created`)
+      // matters — both reconcile functions cancel any already-scheduled
+      // reminder whose identifier isn't in the list they're given, so a
+      // single-event array would wrongly cancel every other event's
+      // reminders.
+      const freshEvents = await listMyEvents();
+      reconcileEventReminders(freshEvents).catch((err) => console.warn("Failed to reconcile event reminders:", err));
+      reconcileSelfReportReminders(freshEvents).catch((err) =>
+        console.warn("Failed to reconcile self-report reminders:", err)
+      );
+      reconcileConfirmationReminders().catch((err) =>
+        console.warn("Failed to reconcile confirmation reminders:", err)
+      );
       router.back();
     } catch (err) {
       // The event was created (exists in DRAFT) even though publishing

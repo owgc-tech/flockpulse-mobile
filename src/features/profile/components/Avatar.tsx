@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { supabase } from "@/src/lib/supabase";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
@@ -37,6 +38,20 @@ export function Avatar() {
       });
   }, []);
 
+  // FP-96-FP-97-adj-1: forces a session refresh on open rather than waiting
+  // for the natural token-refresh cycle, so a role change made on web shows
+  // up here promptly. Best-effort — useSession() already listens for
+  // TOKEN_REFRESHED and updates session.user.app_metadata.role reactively
+  // once this resolves; if it fails, the card still shows whatever role is
+  // in the current session, which is no worse than before this change.
+  const handleOpenProfile = () => {
+    setIsOpen(true);
+    supabase.auth.refreshSession().catch(() => {
+      // Best-effort — if this fails, the card still shows whatever role
+      // is in the current session; no need to block opening over it.
+    });
+  };
+
   const handleEditProfile = () => {
     setIsOpen(false);
     router.push("/(app)/profile/edit");
@@ -54,7 +69,7 @@ export function Avatar() {
 
   return (
     <>
-      <Pressable style={styles.avatar} onPress={() => setIsOpen(true)} testID="avatar-button">
+      <Pressable style={styles.avatar} onPress={handleOpenProfile} testID="avatar-button">
         <Text style={styles.initials}>{initials}</Text>
       </Pressable>
 
