@@ -82,11 +82,12 @@ function EventRow({
 // onScrollToIndexFailed below as the safety net for jumps that land on a
 // still-unmeasured section.
 const ESTIMATED_ROW_HEIGHT = 140;
-// sectionHeader's style is fixed padding (10 top + 10 bottom) plus one
-// line of 15px bold text — genuinely static, unlike rows, but still
-// measured once via onLayout rather than hand-computed from the
-// stylesheet, so it can't silently drift out of sync with styles.sectionHeader.
-const ESTIMATED_SECTION_HEADER_HEIGHT = 41;
+// sectionHeader is now a plain divider (no month label — the dropdown is
+// the single source of truth for that), so its height is just fixed
+// padding — genuinely static, unlike rows, but still measured once via
+// onLayout rather than hand-computed from the stylesheet, so it can't
+// silently drift out of sync with styles.sectionHeader.
+const ESTIMATED_SECTION_HEADER_HEIGHT = 17;
 
 export default function MyEventsScreen() {
   const { session } = useSession();
@@ -345,13 +346,11 @@ export default function MyEventsScreen() {
               <Text style={styles.empty}>No upcoming events</Text>
             </View>
           }
-          renderSectionHeader={({ section }) => (
+          renderSectionHeader={() => (
             <View
               style={styles.sectionHeader}
               onLayout={(e) => handleSectionHeaderLayout(e.nativeEvent.layout.height)}
-            >
-              <Text style={styles.sectionHeaderText}>{section.title}</Text>
-            </View>
+            />
           )}
           renderItem={({ item }) => (
             <EventRow
@@ -433,15 +432,10 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     backgroundColor: "#fff",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#eee",
-  },
-  sectionHeaderText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#333",
   },
   listContent: {
     paddingBottom: 16,
