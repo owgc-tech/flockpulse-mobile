@@ -4,6 +4,7 @@ import {
   listPendingConfirmations,
   submitConfirmation,
 } from "@/src/features/confirmations/services/confirmations.service";
+import { syncConfirmationBadge } from "@/src/features/notifications/services/confirmationBadge.service";
 import type { ConfirmationDecision, PendingConfirmationRow } from "@/src/features/confirmations/types";
 
 function formatSubmittedAt(iso: string): string {
@@ -50,6 +51,13 @@ export default function ConfirmationsScreen() {
   const handleDecision = async (item: PendingConfirmationRow, decision: ConfirmationDecision) => {
     await submitConfirmation(item.self_report_id, decision);
     setItems((prev) => prev.filter((i) => i.self_report_id !== item.self_report_id));
+    // FP-99: beyond the two AC-specified triggers (open/foreground), also
+    // resync right after a successful confirm/reject so the badge doesn't
+    // sit stale until the next foreground event — cheap, and the tab
+    // layout's badge picks this up via the shared store, no prop-drilling.
+    syncConfirmationBadge().catch((err) => {
+      console.warn("Failed to sync confirmation badge:", err);
+    });
   };
 
   return (
