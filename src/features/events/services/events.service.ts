@@ -8,6 +8,8 @@ import type {
   RosterEntry,
   RsvpResponse,
   RsvpStatus,
+  UpdatedEvent,
+  UpdateEventInput,
 } from "@/src/features/events/types";
 
 export async function listMyEvents(): Promise<MyEvent[]> {
@@ -61,5 +63,19 @@ export async function createEvent(input: CreateEventInput): Promise<CreatedEvent
 export async function publishEvent(eventId: string): Promise<PublishedEvent> {
   return apiFetch<PublishedEvent>(`/api/events/${eventId}/publish`, {
     method: "POST",
+  });
+}
+
+// Callers can branch on err.code (NOT_FOUND / FORBIDDEN_SCOPE / INVALID_STATE
+// / IMMUTABLE_FIELD / INVALID_DATETIME / INVALID_FORMATION_LINK) via
+// ApiError. Role-gated requireRole('LEADER') server-side, with an additional
+// ownership scope enforced server-side for exactly-Leader-tier callers
+// (Admin-tier can edit any event) — see DIP-FP-115-mobile-nav-calendar-edit
+// Grounding Check. Client-side canEdit gating is a UI convenience only; this
+// is the real enforcement.
+export async function updateEvent(eventId: string, input: UpdateEventInput): Promise<UpdatedEvent> {
+  return apiFetch<UpdatedEvent>(`/api/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
   });
 }

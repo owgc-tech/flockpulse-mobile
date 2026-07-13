@@ -1,29 +1,18 @@
-import { Tabs } from "expo-router";
-import { useSession } from "@/src/features/auth/hooks/useSession";
+import { Stack } from "expo-router";
 import { Avatar } from "@/src/features/profile/components/Avatar";
 
+// DIP-FP-115-mobile-nav-calendar-edit: the bottom tab bar is gone — My
+// Events and Confirmations are now both reached through the hamburger
+// NavMenu (rendered by index.tsx's own headerLeft), not tab buttons. This
+// is a plain Stack so each screen still gets its own header + the shared
+// Avatar on the right; the role-based Confirmations visibility check that
+// used to live here as `href: null` now lives in NavMenu instead, since
+// there's no tab bar button left to hide.
 export default function TabsLayout() {
-  const { session } = useSession();
-  // Guarded on role being known yet (not just "!== MEMBER"), same pattern
-  // used for the roster section on the event detail screen — defaults to
-  // hidden while this layout's own useSession() call is still resolving
-  // (even though the parent gate already confirmed a valid session), rather
-  // than briefly flashing the Confirmations tab in for a Member.
-  const role = session?.user.app_metadata?.role;
-  const showConfirmationsTab = role !== undefined && role !== "MEMBER";
-
   return (
-    <Tabs screenOptions={{ headerRight: () => <Avatar /> }}>
-      <Tabs.Screen name="index" options={{ title: "My Events" }} />
-      <Tabs.Screen
-        name="confirmations/index"
-        options={{
-          title: "Confirmations",
-          // href: null hides the tab bar button entirely (not just an empty
-          // screen) — the documented Expo Router pattern for this.
-          href: showConfirmationsTab ? undefined : null,
-        }}
-      />
-    </Tabs>
+    <Stack screenOptions={{ headerRight: () => <Avatar /> }}>
+      <Stack.Screen name="index" options={{ title: "My Events" }} />
+      <Stack.Screen name="confirmations/index" options={{ title: "Confirmations" }} />
+    </Stack>
   );
 }

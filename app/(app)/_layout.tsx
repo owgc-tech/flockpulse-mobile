@@ -133,6 +133,7 @@ export default function AppLayout() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
       <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
+      <Stack.Screen name="events/[id]/edit" options={{ title: "Edit Event" }} />
       <Stack.Screen name="events/create" options={{ title: "New Event" }} />
       <Stack.Screen name="profile/edit" options={{ title: "Edit Profile" }} />
     </Stack>

@@ -1,21 +1,50 @@
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router, Tabs } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  RefreshControl,
+  SectionList,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { router, Stack } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
+import { NavMenu } from "@/src/features/navigation/components/NavMenu";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import type { MyEvent } from "@/src/features/events/types";
 
-// DIP-FP-115: "derived from currently-visible events or current date" — the
-// simpler of the two options offered. Scroll-position-aware tracking (via
-// FlatList's onViewableItemsChanged) would need real device scroll-behavior
-// tuning to get right; a static current-date month name doesn't.
-function currentMonthLabel(): string {
-  return new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" });
+interface EventSection {
+  key: string; // "2026-07" — sort/lookup key, not displayed
+  title: string; // "July 2026" — displayed in the section header + dropdown
+  data: MyEvent[];
+}
+
+// DIP-FP-115-mobile-nav-calendar-edit: GET /api/events/mine orders
+// server-side by start_datetime ascending (confirmed against the web
+// service function) — events arrive pre-sorted, so grouping into
+// consecutive month buckets via a single pass (no re-sort) is safe.
+function groupEventsByMonth(events: MyEvent[]): EventSection[] {
+  const sections: EventSection[] = [];
+  let current: EventSection | null = null;
+
+  for (const event of events) {
+    const start = new Date(event.start_datetime);
+    const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`;
+    if (!current || current.key !== key) {
+      current = { key, title: start.toLocaleDateString(undefined, { month: "long", year: "numeric" }), data: [] };
+      sections.push(current);
+    }
+    current.data.push(event);
+  }
+
+  return sections;
 }
 
 function EventRow({ event, onPress }: { event: MyEvent; onPress: () => void }) {
@@ -48,6 +77,34 @@ export default function MyEventsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentMonthLabel, setCurrentMonthLabel] = useState<string | null>(null);
+  const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
+
+  const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
+  const sections = useMemo(() => groupEventsByMonth(events), [events]);
+
+  // Sets the initial dropdown label once data loads, without overriding
+  // whatever the scroll-sync callback below has already moved it to on a
+  // later reload (pull-to-refresh keeping the user's scroll position).
+  useEffect(() => {
+    if (sections.length > 0 && currentMonthLabel === null) {
+      setCurrentMonthLabel(sections[0].title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
+
+  // DIP Grounding Check: this is the fiddly piece that needs real on-device
+  // scroll tuning, not just a correctness check — itemVisiblePercentThreshold
+  // and which viewable item's section "wins" right at a section boundary can
+  // both flicker in ways that only show up while actually scrolling a real
+  // list on a real device.
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 20 }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ isViewable: boolean; section?: EventSection }> }) => {
+      const first = viewableItems.find((v) => v.isViewable && v.section);
+      if (first?.section) setCurrentMonthLabel(first.section.title);
+    }
+  ).current;
 
   const loadEvents = useCallback(async (isRefresh: boolean) => {
     if (isRefresh) {
@@ -95,32 +152,75 @@ export default function MyEventsScreen() {
     });
   };
 
+  const handleSelectMonth = (section: EventSection) => {
+    const sectionIndex = sections.findIndex((s) => s.key === section.key);
+    if (sectionIndex === -1) return;
+    setIsMonthPickerOpen(false);
+    setCurrentMonthLabel(section.title);
+    sectionListRef.current?.scrollToLocation({
+      sectionIndex,
+      itemIndex: 0,
+      animated: true,
+      viewPosition: 0,
+    });
+  };
+
   return (
     <View style={styles.container}>
-      {/* headerTitle cleared and headerLeft supplies the month name +
-          (currently non-functional, flagged) hamburger icon — headerRight
+      {/* headerTitle cleared and headerLeft supplies the real hamburger nav
+          menu + a tappable, scroll-synced month dropdown — headerRight
           (avatar) stays whatever (tabs)/_layout.tsx's shared screenOptions
           already supplies, untouched here. */}
-      <Tabs.Screen
+      <Stack.Screen
         options={{
           headerTitle: () => null,
           headerLeft: () => (
             <View style={styles.headerLeft}>
-              {/* No drawer/menu content specified anywhere — placeholder
-                  tap target only, flagged as incomplete rather than
-                  silently wired to nothing or faking a working menu. */}
+              <NavMenu />
               <Pressable
-                style={styles.menuButton}
-                onPress={() => console.warn("Menu not yet implemented")}
-                testID="menu-button"
+                style={styles.monthPressable}
+                onPress={() => setIsMonthPickerOpen(true)}
+                disabled={sections.length === 0}
+                testID="month-dropdown"
               >
-                <Text style={styles.menuIcon}>☰</Text>
+                <Text style={styles.monthLabel}>
+                  {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                </Text>
+                {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
               </Pressable>
-              <Text style={styles.monthLabel}>{currentMonthLabel()}</Text>
             </View>
           ),
         }}
       />
+
+      <Modal
+        visible={isMonthPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsMonthPickerOpen(false)}
+      >
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setIsMonthPickerOpen(false)}
+          testID="month-dropdown-backdrop"
+        />
+        <View style={styles.monthCard} testID="month-dropdown-card">
+          {sections.map((section) => (
+            <Pressable
+              key={section.key}
+              style={styles.monthOption}
+              onPress={() => handleSelectMonth(section)}
+              testID={`month-option-${section.key}`}
+            >
+              <Text
+                style={[styles.monthOptionText, section.title === currentMonthLabel && styles.monthOptionTextActive]}
+              >
+                {section.title}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Modal>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -131,10 +231,14 @@ export default function MyEventsScreen() {
           <Text style={styles.error}>{error}</Text>
         </View>
       ) : (
-        <FlatList
+        <SectionList
+          ref={sectionListRef}
           contentContainerStyle={styles.listContent}
-          data={events}
+          sections={sections}
           keyExtractor={(item) => item.id}
+          stickySectionHeadersEnabled
+          viewabilityConfig={viewabilityConfig}
+          onViewableItemsChanged={onViewableItemsChanged}
           refreshControl={
             <RefreshControl refreshing={isRefreshing} onRefresh={() => loadEvents(true)} />
           }
@@ -143,6 +247,11 @@ export default function MyEventsScreen() {
               <Text style={styles.empty}>No upcoming events</Text>
             </View>
           }
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeaderText}>{section.title}</Text>
+            </View>
+          )}
           renderItem={({ item }) => (
             <EventRow event={item} onPress={() => handlePressEvent(item)} />
           )}
@@ -173,26 +282,73 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     gap: 10,
   },
-  menuButton: {
-    padding: 4,
-  },
-  menuIcon: {
-    fontSize: 20,
+  monthPressable: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   monthLabel: {
     fontSize: 17,
     fontWeight: "700",
   },
+  monthChevron: {
+    fontSize: 12,
+    color: "#555",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "transparent",
+  },
+  monthCard: {
+    position: "absolute",
+    top: 70,
+    left: 16,
+    width: "60%",
+    maxHeight: "60%",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  monthOption: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  monthOptionText: {
+    fontSize: 15,
+    color: "#111",
+  },
+  monthOptionTextActive: {
+    fontWeight: "700",
+    color: "#2563eb",
+  },
+  sectionHeader: {
+    backgroundColor: "#fff",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#eee",
+  },
+  sectionHeaderText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#333",
+  },
   listContent: {
-    padding: 16,
+    paddingBottom: 16,
     flexGrow: 1,
   },
   row: {
     flexDirection: "row",
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    marginTop: 12,
   },
   dateColumn: {
-    width: "15%",
+    width: "10%",
     alignItems: "center",
     paddingTop: 16,
   },
@@ -207,7 +363,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   eventColumn: {
-    width: "85%",
+    width: "90%",
   },
   center: {
     flex: 1,

@@ -1,12 +1,22 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
+import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
-import type { MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type { EventDetail, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+
+// This screen's local state needs both MyEvent's rsvp_status/rsvp_reason
+// (present on the initial route-param object, which is MyEvent-shaped) and
+// EventDetail's talk_id/created_by_member_id (only present after the
+// fresh-fetch below resolves and merges in) — EventDetail itself represents
+// the endpoint's actual complete, always-present response shape (see its doc
+// comment), so those two fields are Partial'd here to reflect that this
+// component's own state may not have them yet.
+type ScreenEvent = MyEvent & Partial<Pick<EventDetail, "talk_id" | "created_by_member_id">>;
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -24,7 +34,7 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
 // Member-branch read-only copy when RSVP controls aren't editable
 // (effective_status !== 'SCHEDULED'): distinguishes "hasn't opened yet" from
 // "already closed" rather than showing one generic message either way.
-function readOnlyRsvpLabel(event: MyEvent): string {
+function readOnlyRsvpLabel(event: ScreenEvent): string {
   if (event.rsvp_status === "YES") return "You responded: Going";
   if (event.rsvp_status === "NO") {
     return event.rsvp_reason ? `You responded: Not going — ${event.rsvp_reason}` : "You responded: Not going";
@@ -45,8 +55,9 @@ export default function EventDetailScreen() {
   const role = session?.user.app_metadata?.role;
   const showRoster = role !== undefined && role !== "MEMBER";
 
-  const [event, setEvent] = useState<MyEvent | null>(null);
+  const [event, setEvent] = useState<ScreenEvent | null>(null);
   const [parseError, setParseError] = useState(false);
+  const [myProfileId, setMyProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!params.event) {
@@ -54,11 +65,29 @@ export default function EventDetailScreen() {
       return;
     }
     try {
-      setEvent(JSON.parse(params.event) as MyEvent);
+      // The initial object is MyEvent-shaped (list-screen tap or
+      // notification payload) — it never has created_by_member_id, only the
+      // fresh-fetch below does. Cast is safe: it's simply absent until the
+      // merge below adds it.
+      setEvent(JSON.parse(params.event) as ScreenEvent);
     } catch {
       setParseError(true);
     }
   }, [params.event]);
+
+  // DIP-FP-115-mobile-nav-calendar-edit: needed for the ownership half of
+  // the Edit-button gate below. No caching, same rationale as Avatar.tsx's
+  // fetchMyProfile() call — this screen is opened infrequently enough that
+  // an always-fresh network hit is cheap and avoids a stale-role/group bug
+  // class entirely.
+  useEffect(() => {
+    fetchMyProfile()
+      .then((profile) => setMyProfileId(profile.id))
+      .catch(() => {
+        // Leave canEdit's ownership branch resolved as "unknown" rather
+        // than blocking the whole screen over a failed profile fetch.
+      });
+  }, []);
 
   // The initial event object came baked into a notification's data payload
   // at scheduling time (or route params from the list screen) — it can be
@@ -90,9 +119,42 @@ export default function EventDetailScreen() {
     );
   }
 
+  // DIP-FP-115-mobile-nav-calendar-edit Grounding Check formula: Admin-tier
+  // can edit any event; everyone else only their own. created_by_member_id
+  // is undefined until the fresh-fetch above resolves, and myProfileId is
+  // null until its own fetch resolves — canEdit stays false (button hidden,
+  // not flashed-then-hidden) until both are known, same defensive pattern
+  // used for showRoster above. Real enforcement is server-side regardless
+  // (see updateEvent's doc comment) — this only controls whether the button
+  // renders.
+  const isAdminTier = role === "ADMIN";
+  const canEdit =
+    role !== undefined &&
+    event.created_by_member_id !== undefined &&
+    myProfileId !== null &&
+    (isAdminTier || event.created_by_member_id === myProfileId);
+
+  const handleEditPress = () => {
+    router.push({
+      pathname: "/(app)/events/[id]/edit",
+      params: { id: event.id, event: JSON.stringify(event) },
+    });
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: event.name }} />
+      <Stack.Screen
+        options={{
+          title: event.name,
+          headerRight: canEdit
+            ? () => (
+                <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </Pressable>
+              )
+            : undefined,
+        }}
+      />
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
@@ -127,8 +189,8 @@ function RsvpSection({
   event,
   onEventChange,
 }: {
-  event: MyEvent;
-  onEventChange: (event: MyEvent) => void;
+  event: ScreenEvent;
+  onEventChange: (event: ScreenEvent) => void;
 }) {
   const editable = event.effective_status === "SCHEDULED";
 
@@ -195,6 +257,16 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#fff",
     flexGrow: 1,
+  },
+  editButton: {
+    marginRight: 16,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  editButtonText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   center: {
     flex: 1,
