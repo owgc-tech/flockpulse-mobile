@@ -259,30 +259,22 @@ export default function EventDetailScreen() {
 
       <View style={styles.divider} />
 
-      <RsvpSection event={event} onEventChange={setEvent} />
-
       {event.prayer_leader_member_id ? (
-        <>
-          <View style={styles.divider} />
-          <View>
-            <Text style={styles.sectionTitle}>Prayer Leader</Text>
-            <Text style={styles.meta}>
-              {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
-            </Text>
-          </View>
-        </>
+        <View>
+          <Text style={styles.sectionTitle}>Prayer Leader</Text>
+          <Text style={styles.meta}>
+            {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
+          </Text>
+        </View>
       ) : null}
 
       {event.food_assignment ? (
-        <>
-          <View style={styles.divider} />
-          <View>
-            <Text style={styles.sectionTitle}>Food Assignment</Text>
-            <Text style={styles.meta}>
-              {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
-            </Text>
-          </View>
-        </>
+        <View>
+          <Text style={styles.sectionTitle}>Food Assignment</Text>
+          <Text style={styles.meta}>
+            {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
+          </Text>
+        </View>
       ) : null}
 
       {/* talk_id is undefined (not yet fetched) briefly before the
@@ -290,27 +282,28 @@ export default function EventDetailScreen() {
           explicit null — only null (confirmed no talk) hides this
           section outright; undefined still renders it in a loading state. */}
       {event.talk_id !== null ? (
-        <>
-          <View style={styles.divider} />
-          <View>
-            <Text style={styles.sectionTitle}>Formation Talk</Text>
-            {formationTalk ? (
-              <>
-                <Text style={styles.meta}>
-                  {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
-                </Text>
-                {formationTalk.talk_description ? (
-                  <Text style={styles.metaSecondary}>{formationTalk.talk_description}</Text>
-                ) : null}
-              </>
-            ) : (
-              <Text style={styles.metaSecondary}>
-                {contextLookupsSettled ? "Not available" : "Loading…"}
+        <View>
+          <Text style={styles.sectionTitle}>Formation Talk</Text>
+          {formationTalk ? (
+            <>
+              <Text style={styles.meta}>
+                {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
               </Text>
-            )}
-          </View>
-        </>
+              {formationTalk.talk_description ? (
+                <Text style={styles.metaSecondary}>{formationTalk.talk_description}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.metaSecondary}>
+              {contextLookupsSettled ? "Not available" : "Loading…"}
+            </Text>
+          )}
+        </View>
       ) : null}
+
+      <View style={styles.divider} />
+
+      <RsvpSection event={event} onEventChange={setEvent} />
 
       {showRoster ? (
         <>
@@ -377,7 +370,7 @@ function RosterSection({ eventId }: { eventId: string }) {
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Roster</Text>
+      <Text style={styles.sectionTitle}>Invitees</Text>
       {error ? (
         <Text style={styles.error}>{error}</Text>
       ) : !roster ? (
@@ -399,6 +392,8 @@ const styles = StyleSheet.create({
     marginRight: 16,
     paddingHorizontal: 4,
     paddingVertical: 4,
+    alignItems: "center",
+    justifyContent: "center",
   },
   editButtonText: {
     color: "#2563eb",
