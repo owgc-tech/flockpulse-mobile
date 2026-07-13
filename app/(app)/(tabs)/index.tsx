@@ -333,7 +333,6 @@ export default function MyEventsScreen() {
           contentContainerStyle={styles.listContent}
           sections={sections}
           keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled
           viewabilityConfig={viewabilityConfig}
           onViewableItemsChanged={onViewableItemsChanged}
           getItemLayout={getItemLayout}
@@ -351,7 +350,9 @@ export default function MyEventsScreen() {
               style={styles.sectionHeader}
               onLayout={(e) => handleSectionHeaderLayout(e.nativeEvent.layout.height)}
             >
-              <Text style={styles.sectionHeaderText}>{section.title}</Text>
+              <Text style={styles.sectionHeaderText}>
+                {section.title !== currentMonthLabel ? section.title : ""}
+              </Text>
             </View>
           )}
           renderItem={({ item }) => (

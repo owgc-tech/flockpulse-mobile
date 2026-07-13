@@ -16,6 +16,17 @@ function formatSubmittedAt(iso: string): string {
   });
 }
 
+// DIP-FP-99-adj-1: event_start_datetime/event_end_datetime are now part of
+// PendingConfirmationRow (previously only event_id was available).
+function formatEventRange(startIso: string, endIso: string): string {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  const dateLabel = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const startTime = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const endTime = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${dateLabel}, ${startTime} – ${endTime}`;
+}
+
 export default function ConfirmationsScreen() {
   const [items, setItems] = useState<PendingConfirmationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,6 +113,9 @@ function ConfirmationItem({
 
   return (
     <View style={styles.card} testID={`confirmation-item-${item.self_report_id}`}>
+      <Text style={styles.eventName}>{item.event_name}</Text>
+      <Text style={styles.meta}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
+      <Text style={styles.meta}>{item.event_location_name}</Text>
       <Text style={styles.name}>
         {item.member_first_name} {item.member_last_name}
       </Text>
@@ -162,9 +176,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#f5f5f5",
     marginBottom: 12,
   },
+  eventName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111",
+  },
   name: {
     fontSize: 16,
     fontWeight: "700",
+    marginTop: 8,
   },
   meta: {
     fontSize: 14,

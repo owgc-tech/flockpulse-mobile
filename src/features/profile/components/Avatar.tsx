@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { supabase } from "@/src/lib/supabase";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
@@ -13,9 +14,17 @@ function getInitials(firstName: string, lastName: string): string {
   return initials || "?";
 }
 
+// FP-96-FP-97-adj-1: was missing the four roles FP-113-web added on the
+// backend (SR_COORDINATOR/COORDINATOR/COMMUNITY_SERVANT/PASTORAL_LEADER) —
+// those accounts fell through to the raw role string via the ?? role
+// fallback below instead of a proper label.
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Admin",
+  SR_COORDINATOR: "Sr. Coordinator",
+  COORDINATOR: "Coordinator",
+  COMMUNITY_SERVANT: "Community Servant",
   LEADER: "Leader",
+  PASTORAL_LEADER: "Pastoral Leader",
   MEMBER: "Member",
 };
 
@@ -37,6 +46,20 @@ export function Avatar() {
       });
   }, []);
 
+  // FP-96-FP-97-adj-1: forces a session refresh on open rather than waiting
+  // for the natural token-refresh cycle, so a role change made on web shows
+  // up here promptly. Best-effort — useSession() already listens for
+  // TOKEN_REFRESHED and updates session.user.app_metadata.role reactively
+  // once this resolves; if it fails, the card still shows whatever role is
+  // in the current session, which is no worse than before this change.
+  const handleOpenProfile = () => {
+    setIsOpen(true);
+    supabase.auth.refreshSession().catch(() => {
+      // Best-effort — if this fails, the card still shows whatever role
+      // is in the current session; no need to block opening over it.
+    });
+  };
+
   const handleEditProfile = () => {
     setIsOpen(false);
     router.push("/(app)/profile/edit");
@@ -54,7 +77,7 @@ export function Avatar() {
 
   return (
     <>
-      <Pressable style={styles.avatar} onPress={() => setIsOpen(true)} testID="avatar-button">
+      <Pressable style={styles.avatar} onPress={handleOpenProfile} testID="avatar-button">
         <Text style={styles.initials}>{initials}</Text>
       </Pressable>
 

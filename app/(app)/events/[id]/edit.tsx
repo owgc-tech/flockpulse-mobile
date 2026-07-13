@@ -13,13 +13,16 @@ import {
 } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { updateEvent } from "@/src/features/events/services/events.service";
+import { listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import {
   formationDisplayName,
   listCourses,
   listModules,
   listTalks,
 } from "@/src/features/formation/services/formation.service";
+import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
+import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
+import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
@@ -213,6 +216,7 @@ export default function EditEventScreen() {
     initialEvent.end_datetime ? new Date(initialEvent.end_datetime) : null
   );
   const [showIosPicker, setShowIosPicker] = useState<"start" | "end" | null>(null);
+  const [iosDraftDate, setIosDraftDate] = useState<Date>(new Date());
   const [locationName, setLocationName] = useState(initialEvent.location_name ?? "");
   const [locationAddress, setLocationAddress] = useState(initialEvent.location_address ?? "");
   const [locationUrl, setLocationUrl] = useState(initialEvent.location_url ?? "");
@@ -260,6 +264,7 @@ export default function EditEventScreen() {
         },
       });
     } else {
+      setIosDraftDate(current);
       setShowIosPicker(which);
     }
   };
@@ -295,6 +300,24 @@ export default function EditEventScreen() {
         foodAssignment:
           foodAssignment.group_ids.length || foodAssignment.member_ids.length ? foodAssignment : null,
       });
+
+      // FP-96-FP-97-adj-1: My Events' own mount effect (where reconciliation
+      // normally runs) deliberately doesn't refetch on focus, so without
+      // this, an edited event's self-report/event reminders would never get
+      // rescheduled until the next cold app relaunch or manual pull-to-
+      // refresh. Passing the full fetched list (not just this one event)
+      // matters — both reconcile functions cancel any already-scheduled
+      // reminder whose identifier isn't in the list they're given, so a
+      // single-event array would wrongly cancel every other event's
+      // reminders.
+      const freshEvents = await listMyEvents();
+      reconcileEventReminders(freshEvents).catch((err) => console.warn("Failed to reconcile event reminders:", err));
+      reconcileSelfReportReminders(freshEvents).catch((err) =>
+        console.warn("Failed to reconcile self-report reminders:", err)
+      );
+      reconcileConfirmationReminders().catch((err) =>
+        console.warn("Failed to reconcile confirmation reminders:", err)
+      );
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update event.");
@@ -340,20 +363,52 @@ export default function EditEventScreen() {
         <Text>{formatDateTime(endDatetime)}</Text>
       </Pressable>
 
-      {Platform.OS === "ios" && showIosPicker ? (
-        <DateTimePicker
-          value={(showIosPicker === "start" ? startDatetime : endDatetime) ?? new Date()}
-          mode="datetime"
-          display="spinner"
-          onChange={(event, selectedDate) => {
-            const which = showIosPicker;
-            setShowIosPicker(null);
-            if (event.type === "set" && selectedDate) {
-              (which === "start" ? setStartDatetime : setEndDatetime)(selectedDate);
-            }
-          }}
+      {/* DIP Grounding Check: display="spinner" fires onChange on every
+          wheel tick, not just on a final confirm — committing and closing
+          on the very first tick (the old inline behavior) cut the user off
+          after adjusting just one wheel (e.g. the hour) before they could
+          touch the date or minutes. This tracks the in-progress value in
+          iosDraftDate and only commits it to start/endDatetime when Done is
+          tapped; Cancel/backdrop discards the draft instead. */}
+      <Modal
+        visible={Platform.OS === "ios" && showIosPicker !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowIosPicker(null)}
+      >
+        <Pressable
+          style={styles.iosPickerBackdrop}
+          onPress={() => setShowIosPicker(null)}
+          testID="ios-picker-backdrop"
         />
-      ) : null}
+        <View style={styles.iosPickerCard}>
+          <View style={styles.iosPickerHeader}>
+            <Pressable onPress={() => setShowIosPicker(null)} testID="ios-picker-cancel">
+              <Text style={styles.linkText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                const which = showIosPicker;
+                setShowIosPicker(null);
+                if (which) {
+                  (which === "start" ? setStartDatetime : setEndDatetime)(iosDraftDate);
+                }
+              }}
+              testID="ios-picker-done"
+            >
+              <Text style={styles.doneText}>Done</Text>
+            </Pressable>
+          </View>
+          <DateTimePicker
+            value={iosDraftDate}
+            mode="datetime"
+            display="spinner"
+            onChange={(_event, selectedDate) => {
+              if (selectedDate) setIosDraftDate(selectedDate);
+            }}
+          />
+        </View>
+      </Modal>
 
       <Text style={styles.label}>Location Name</Text>
       <TextInput
@@ -496,6 +551,29 @@ const styles = StyleSheet.create({
   },
   center: {
     marginTop: 24,
+  },
+  iosPickerBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  iosPickerCard: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingBottom: 24,
+  },
+  iosPickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#eee",
   },
   optionRow: {
     paddingHorizontal: 16,
