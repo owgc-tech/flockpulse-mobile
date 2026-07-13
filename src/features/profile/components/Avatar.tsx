@@ -14,9 +14,17 @@ function getInitials(firstName: string, lastName: string): string {
   return initials || "?";
 }
 
+// FP-96-FP-97-adj-1: was missing the four roles FP-113-web added on the
+// backend (SR_COORDINATOR/COORDINATOR/COMMUNITY_SERVANT/PASTORAL_LEADER) —
+// those accounts fell through to the raw role string via the ?? role
+// fallback below instead of a proper label.
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Admin",
+  SR_COORDINATOR: "Sr. Coordinator",
+  COORDINATOR: "Coordinator",
+  COMMUNITY_SERVANT: "Community Servant",
   LEADER: "Leader",
+  PASTORAL_LEADER: "Pastoral Leader",
   MEMBER: "Member",
 };
 

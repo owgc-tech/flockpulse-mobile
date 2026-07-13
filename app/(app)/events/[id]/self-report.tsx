@@ -192,7 +192,7 @@ export default function SelfReportScreen() {
           ) : null}
 
           <Pressable
-            style={[styles.button, styles.buttonSubmit, attended === null && styles.buttonDisabled]}
+            style={[styles.submitButton, attended === null && styles.buttonDisabled]}
             onPress={handleSubmit}
             disabled={isSubmitting || attended === null}
             testID="self-report-submit"
@@ -293,7 +293,15 @@ const styles = StyleSheet.create({
   buttonSelected: {
     backgroundColor: "#2563eb",
   },
-  buttonSubmit: {
+  // FP-96-FP-97-adj-1: this used to compose [styles.button, styles.buttonSubmit]
+  // — button's flex: 1 makes sense for the Yes/No pair sharing a
+  // flexDirection: "row" parent (styles.row), but this button sits alone in
+  // the screen's column-direction ScrollView, where flex: 1 instead grows it
+  // to fill all remaining vertical space. Dedicated style, no flex.
+  submitButton: {
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: "center",
     backgroundColor: "#16a34a",
     marginTop: 24,
   },

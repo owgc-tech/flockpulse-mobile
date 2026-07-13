@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
@@ -20,6 +20,17 @@ type Gate =
 export default function AppLayout() {
   const { session, isLoading } = useSession();
   const [gate, setGate] = useState<Gate>({ phase: "loading" });
+  // FP-96-FP-97-adj-1: session?.access_token is a dependency below (needed
+  // to notice an aal-level change after mfa-verify/mfa-enroll), but
+  // access_token also changes on every routine token refresh — including
+  // the one Avatar.tsx's Profile Card now force-triggers on open. Without
+  // this, every one of those refreshes re-ran the full gate from scratch and
+  // re-prompted Face ID/passcode for a user who was already sitting in the
+  // app. Tracks which user id the gate last reached "ready" for so a token
+  // refresh for that same user can skip straight back to ready instead of
+  // re-running the trust/hardware/biometric checks; cleared on sign-out so
+  // a genuine new sign-in always re-checks.
+  const readyUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isLoading) {
@@ -28,6 +39,7 @@ export default function AppLayout() {
     }
 
     if (!session) {
+      readyUserIdRef.current = null;
       setGate({ phase: "redirect", href: "/(auth)/login" });
       return;
     }
@@ -54,9 +66,19 @@ export default function AppLayout() {
         return;
       }
 
+      // Already gated to "ready" for this exact user earlier in this app
+      // session — a token refresh (routine auto-refresh, or Avatar.tsx's
+      // forced refreshSession()) isn't a new app open, so it shouldn't
+      // re-trigger Face ID/passcode every time one fires.
+      if (readyUserIdRef.current === session.user.id) {
+        setGate({ phase: "ready" });
+        return;
+      }
+
       const trusted = await isDeviceTrusted(session.user.id);
       if (cancelled) return;
       if (!trusted) {
+        readyUserIdRef.current = session.user.id;
         setGate({ phase: "ready" });
         return;
       }
@@ -68,6 +90,7 @@ export default function AppLayout() {
       // password + TOTP. Skip once for that specific transition; a genuine
       // reopen runs in a fresh JS instance where this is never set.
       if (consumeJustAuthenticated()) {
+        readyUserIdRef.current = session.user.id;
         setGate({ phase: "ready" });
         return;
       }
@@ -75,6 +98,7 @@ export default function AppLayout() {
       const hardwareAvailable = await isBiometricHardwareAvailable();
       if (cancelled) return;
       if (!hardwareAvailable) {
+        readyUserIdRef.current = session.user.id;
         setGate({ phase: "ready" });
         return;
       }
@@ -82,6 +106,7 @@ export default function AppLayout() {
       setGate({ phase: "biometric-lock" });
       const success = await authenticateWithBiometrics();
       if (cancelled) return;
+      if (success) readyUserIdRef.current = session.user.id;
       setGate(success ? { phase: "ready" } : { phase: "biometric-lock" });
     })();
 
@@ -108,7 +133,10 @@ export default function AppLayout() {
       <BiometricLockScreen
         onRetry={async () => {
           const success = await authenticateWithBiometrics();
-          if (success) setGate({ phase: "ready" });
+          if (success) {
+            if (session) readyUserIdRef.current = session.user.id;
+            setGate({ phase: "ready" });
+          }
         }}
         onUsePasswordInstead={async () => {
           // FP-92 guard: never let a failed/declined biometric prompt fall
