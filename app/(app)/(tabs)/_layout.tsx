@@ -39,11 +39,18 @@ export default function TabsLayout() {
 
   return (
     <Tabs screenOptions={{ headerRight: () => <Avatar /> }}>
-      <Tabs.Screen name="index" options={{ title: "My Events" }} />
+      {/* FP-118: title used to double as both the native header text and
+          the bottom tab bar's label (React Navigation falls back to title
+          for tabBarLabel when it isn't set explicitly) — blanking title
+          outright would've silently wiped the tab bar's own labels too.
+          tabBarLabel + headerTitle: () => null keeps the tab bar text while
+          removing just the now-redundant native header title. */}
+      <Tabs.Screen name="index" options={{ tabBarLabel: "My Events", headerTitle: () => null }} />
       <Tabs.Screen
         name="confirmations/index"
         options={{
-          title: "Confirmations",
+          tabBarLabel: "Confirmations",
+          headerTitle: () => null,
           href: showConfirmations ? undefined : null,
           // undefined (not 0) when there's nothing pending — Tabs.Screen
           // renders a bare dot for any defined badge value, including 0.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
 import { getEventById } from "@/src/features/events/services/events.service";
 import { ApiError } from "@/src/lib/api";
@@ -70,7 +70,6 @@ export default function SelfReportScreen() {
   if (parseError || !event) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: "Self-Report" }} />
         <Text style={styles.error}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
@@ -112,8 +111,6 @@ export default function SelfReportScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Self-Report" }} />
-
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       <Text style={styles.meta}>{event.location_name}</Text>

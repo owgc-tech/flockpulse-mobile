@@ -197,7 +197,6 @@ export default function EventDetailScreen() {
   if (parseError || !event) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: "Event" }} />
         <Text style={styles.error}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
@@ -231,7 +230,6 @@ export default function EventDetailScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Stack.Screen
         options={{
-          title: event.name,
           headerRight: canEdit
             ? () => (
                 <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">

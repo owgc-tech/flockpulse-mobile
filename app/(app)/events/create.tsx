@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { createEvent, listMyEvents, publishEvent } from "@/src/features/events/services/events.service";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
@@ -331,8 +331,6 @@ export default function CreateEventScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "New Event" }} />
-
       <Text style={styles.label}>Name</Text>
       <TextInput
         style={styles.input}

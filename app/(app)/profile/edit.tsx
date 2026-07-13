@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
@@ -98,7 +98,6 @@ export default function EditProfileScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: "Edit Profile" }} />
         <ActivityIndicator />
       </View>
     );
@@ -106,8 +105,6 @@ export default function EditProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Edit Profile" }} />
-
       <Text style={styles.label}>First name</Text>
       <TextInput
         style={styles.input}

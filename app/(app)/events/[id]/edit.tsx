@@ -328,7 +328,7 @@ export default function EditEventScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Edit Event", headerBackButtonDisplayMode: "minimal" }} />
+      <Stack.Screen options={{ headerBackButtonDisplayMode: "minimal" }} />
 
       <Text style={styles.label}>Name</Text>
       <TextInput

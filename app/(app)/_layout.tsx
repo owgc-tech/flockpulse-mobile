@@ -10,6 +10,7 @@ import {
   isBiometricHardwareAvailable,
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
+import { CommunityBanner } from "@/src/features/tenant/components/CommunityBanner";
 
 type Gate =
   | { phase: "loading" }
@@ -156,15 +157,27 @@ export default function AppLayout() {
   // renders it as a positioned popover (a Modal) owned by the avatar
   // component, not something registered here. Not a change to the gate
   // above — only what renders once it says "ready".
+  //
+  // FP-118: CommunityBanner renders once here, above the Stack, so it's
+  // present on every (app)-group screen without any individual screen
+  // having to render it itself. None of these Stack.Screen entries set a
+  // `title` anymore — native header titles are redundant now that the
+  // banner plus each screen's own body content (which already shows the
+  // relevant name/heading) covers that. (tabs)'s own _layout.tsx handles
+  // its two screens' headers separately, including preserving their bottom
+  // tab bar labels via tabBarLabel.
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
-      <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
-      <Stack.Screen name="events/[id]/edit" options={{ title: "Edit Event" }} />
-      <Stack.Screen name="events/create" options={{ title: "New Event" }} />
-      <Stack.Screen name="profile/edit" options={{ title: "Edit Profile" }} />
-    </Stack>
+    <View style={styles.appShell}>
+      <CommunityBanner />
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="events/[id]" />
+        <Stack.Screen name="events/[id]/self-report" />
+        <Stack.Screen name="events/[id]/edit" />
+        <Stack.Screen name="events/create" />
+        <Stack.Screen name="profile/edit" />
+      </Stack>
+    </View>
   );
 }
 
@@ -189,6 +202,9 @@ function BiometricLockScreen({
 }
 
 const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+  },
   center: {
     flex: 1,
     justifyContent: "center",

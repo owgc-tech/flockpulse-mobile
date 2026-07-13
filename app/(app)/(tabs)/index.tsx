@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
@@ -265,31 +265,6 @@ export default function MyEventsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* headerTitle cleared and headerLeft supplies a tappable,
-          scroll-synced month dropdown — headerRight (avatar) stays whatever
-          (tabs)/_layout.tsx's shared screenOptions already supplies,
-          untouched here. */}
-      <Stack.Screen
-        options={{
-          headerTitle: () => null,
-          headerLeft: () => (
-            <View style={styles.headerLeft}>
-              <Pressable
-                style={styles.monthPressable}
-                onPress={() => setIsMonthPickerOpen(true)}
-                disabled={sections.length === 0}
-                testID="month-dropdown"
-              >
-                <Text style={styles.monthLabel}>
-                  {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                </Text>
-                {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
-              </Pressable>
-            </View>
-          ),
-        }}
-      />
-
       <Modal
         visible={isMonthPickerOpen}
         transparent
@@ -318,6 +293,24 @@ export default function MyEventsScreen() {
           ))}
         </View>
       </Modal>
+
+      {/* FP-118: relocated from the native header's headerLeft (now that
+          headerTitle/headerLeft is no longer used app-wide) into the body,
+          directly above the list — same Pressable/Modal/picker state as
+          before, just moved. */}
+      <View style={styles.monthDropdownRow}>
+        <Pressable
+          style={styles.monthPressable}
+          onPress={() => setIsMonthPickerOpen(true)}
+          disabled={sections.length === 0}
+          testID="month-dropdown"
+        >
+          <Text style={styles.monthLabel}>
+            {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          </Text>
+          {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
+        </Pressable>
+      </View>
 
       {isLoading ? (
         <View style={styles.center}>
@@ -383,11 +376,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  headerLeft: {
+  monthDropdownRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 8,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
   },
   monthPressable: {
     flexDirection: "row",
@@ -408,7 +402,15 @@ const styles = StyleSheet.create({
   },
   monthCard: {
     position: "absolute",
-    top: 70,
+    // FP-118 Grounding Check: this was calibrated for the dropdown's old
+    // position embedded in the native header; now that it's relocated into
+    // the body (below CommunityBanner + the still-present-but-blank-title
+    // native header row), it needs to anchor further down. This value is a
+    // best-effort estimate, not a measured one — needs on-device
+    // confirmation that the card still visually anchors just under the
+    // dropdown across device sizes/safe-area insets, same fiddly-pixel
+    // caveat as the month-scroll tuning elsewhere in this screen.
+    top: 150,
     left: 16,
     width: "60%",
     maxHeight: "60%",
