@@ -37,18 +37,18 @@ async function resolveFoodAssignmentNames(assignment: EventTargetSelector): Prom
   const memberIds = assignment.member_ids ?? [];
 
   const [groupSettled, memberSettled] = await Promise.all([
-    Promise.allSettled(groupIds.map((id) => apiFetch<GroupLookupRow[]>(`/api/groups?id=${id}`))),
-    Promise.allSettled(memberIds.map((id) => apiFetch<MemberLookupRow[]>(`/api/members?id=${id}`))),
+    Promise.allSettled(groupIds.map((id) => apiFetch<GroupLookupRow>(`/api/groups?id=${id}`))),
+    Promise.allSettled(memberIds.map((id) => apiFetch<MemberLookupRow>(`/api/members?id=${id}`))),
   ]);
 
   const groupNames = groupSettled
-    .filter((r): r is PromiseFulfilledResult<GroupLookupRow[]> => r.status === "fulfilled")
-    .map((r) => r.value[0]?.name)
+    .filter((r): r is PromiseFulfilledResult<GroupLookupRow> => r.status === "fulfilled")
+    .map((r) => r.value?.name)
     .filter((name): name is string => Boolean(name));
 
   const memberNames = memberSettled
-    .filter((r): r is PromiseFulfilledResult<MemberLookupRow[]> => r.status === "fulfilled")
-    .map((r) => r.value[0])
+    .filter((r): r is PromiseFulfilledResult<MemberLookupRow> => r.status === "fulfilled")
+    .map((r) => r.value)
     .filter((row): row is MemberLookupRow => Boolean(row))
     .map((row) => `${row.first_name} ${row.last_name}`);
 
@@ -171,16 +171,17 @@ export default function EventDetailScreen() {
   // merge lands and picks up the Formation Talk lookup at that point.
   useEffect(() => {
     if (!event) return;
+    setContextLookupsSettled(false);
 
     Promise.allSettled([
       event.prayer_leader_member_id
-        ? apiFetch<MemberLookupRow[]>(`/api/members?id=${event.prayer_leader_member_id}`)
+        ? apiFetch<MemberLookupRow>(`/api/members?id=${event.prayer_leader_member_id}`)
         : Promise.resolve(null),
       event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
       event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
     ]).then(([prayerResult, foodResult, talkResult]) => {
-      if (prayerResult.status === "fulfilled" && prayerResult.value?.[0]) {
-        const member = prayerResult.value[0];
+      if (prayerResult.status === "fulfilled" && prayerResult.value) {
+        const member = prayerResult.value;
         setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
       }
       if (foodResult.status === "fulfilled" && foodResult.value) {
