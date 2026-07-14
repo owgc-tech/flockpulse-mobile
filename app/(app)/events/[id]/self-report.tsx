@@ -121,6 +121,7 @@ export default function SelfReportScreen() {
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       <Text style={styles.meta}>{event.location_name}</Text>
+      <Text style={styles.metaSecondary}>{event.location_address}</Text>
       <Text style={styles.rsvp}>{rsvpLabel(event)}</Text>
 
       <View style={styles.divider} />
@@ -243,6 +244,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
     marginTop: 8,
+  },
+  metaSecondary: {
+    fontSize: 14,
+    color: "#777",
+    marginTop: 2,
   },
   rsvp: {
     fontSize: 14,

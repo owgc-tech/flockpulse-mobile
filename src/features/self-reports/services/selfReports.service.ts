@@ -1,5 +1,9 @@
 import { apiFetch } from "@/src/lib/api";
-import type { SelfReportResponse, SelfReportStatus } from "@/src/features/self-reports/types";
+import type {
+  PendingSelfReportRow,
+  SelfReportResponse,
+  SelfReportStatus,
+} from "@/src/features/self-reports/types";
 
 interface SubmitSelfReportOptions {
   reason?: string;
@@ -31,4 +35,10 @@ export async function submitSelfReport(
     method: "POST",
     body: JSON.stringify(body),
   });
+}
+
+// DIP-FP-119-mobile: events this member is expected at, completed but not
+// yet locked, not cancelled, and not already self-reported.
+export async function listPendingSelfReports(): Promise<PendingSelfReportRow[]> {
+  return apiFetch<PendingSelfReportRow[]>("/api/self-reports/pending");
 }
