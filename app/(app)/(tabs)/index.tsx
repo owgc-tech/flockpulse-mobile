@@ -82,10 +82,12 @@ function EventRow({
 // onScrollToIndexFailed below as the safety net for jumps that land on a
 // still-unmeasured section.
 const ESTIMATED_ROW_HEIGHT = 140;
-// sectionHeader's style is fixed padding (10 top + 10 bottom) plus one
-// line of 15px bold text — genuinely static, unlike rows, but still
-// measured once via onLayout rather than hand-computed from the
-// stylesheet, so it can't silently drift out of sync with styles.sectionHeader.
+// This is specifically the *labeled* header's estimate (fixed padding, 10
+// top + 10 bottom, plus one line of 15px bold text) — the blank header a
+// section gets once its month matches the dropdown (see sectionHeaderBlank)
+// is genuinely shorter, so headers are no longer assumed uniform (see
+// sectionHeaderHeightsRef below). Used only as a fallback before a given
+// section has rendered and measured itself once, not a universal height.
 const ESTIMATED_SECTION_HEADER_HEIGHT = 41;
 
 export default function MyEventsScreen() {
@@ -106,12 +108,16 @@ export default function MyEventsScreen() {
   const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
   const sections = useMemo(() => groupEventsByMonth(events), [events]);
 
-  // Measured heights, keyed by event id (rows) — a single ref for the
-  // section header since its height is uniform across sections. `layoutTick`
-  // forces the itemLayouts memo below to recompute after a measurement comes
-  // in (refs alone don't trigger a re-render).
+  // Measured heights, keyed by event id (rows) and by section key (headers).
+  // Headers are keyed per-section rather than sharing one ref because a
+  // blank header (its month currently matches the dropdown — see
+  // sectionHeaderBlank) is genuinely shorter than a labeled one; assuming
+  // one uniform height across all sections would throw off getItemLayout's
+  // math for whichever sections don't match that assumption. `layoutTick`
+  // forces the itemLayouts memo below to recompute after a measurement
+  // comes in (refs alone don't trigger a re-render).
   const rowHeightsRef = useRef<Map<string, number>>(new Map());
-  const sectionHeaderHeightRef = useRef<number | null>(null);
+  const sectionHeaderHeightsRef = useRef<Map<string, number>>(new Map());
   const [layoutTick, setLayoutTick] = useState(0);
 
   const handleRowLayout = useCallback((eventId: string, height: number) => {
@@ -120,9 +126,9 @@ export default function MyEventsScreen() {
     setLayoutTick((t) => t + 1);
   }, []);
 
-  const handleSectionHeaderLayout = useCallback((height: number) => {
-    if (sectionHeaderHeightRef.current === height) return;
-    sectionHeaderHeightRef.current = height;
+  const handleSectionHeaderLayout = useCallback((sectionKey: string, height: number) => {
+    if (sectionHeaderHeightsRef.current.get(sectionKey) === height) return;
+    sectionHeaderHeightsRef.current.set(sectionKey, height);
     setLayoutTick((t) => t + 1);
   }, []);
 
@@ -132,9 +138,9 @@ export default function MyEventsScreen() {
   const itemLayouts = useMemo(() => {
     const layouts: { length: number; offset: number }[] = [];
     let offset = 0;
-    const headerHeight = sectionHeaderHeightRef.current ?? ESTIMATED_SECTION_HEADER_HEIGHT;
 
     for (const section of sections) {
+      const headerHeight = sectionHeaderHeightsRef.current.get(section.key) ?? ESTIMATED_SECTION_HEADER_HEIGHT;
       layouts.push({ length: headerHeight, offset });
       offset += headerHeight;
       for (const item of section.data) {
@@ -338,16 +344,17 @@ export default function MyEventsScreen() {
               <Text style={styles.empty}>No upcoming events</Text>
             </View>
           }
-          renderSectionHeader={({ section }) => (
-            <View
-              style={styles.sectionHeader}
-              onLayout={(e) => handleSectionHeaderLayout(e.nativeEvent.layout.height)}
-            >
-              <Text style={styles.sectionHeaderText}>
-                {section.title !== currentMonthLabel ? section.title : ""}
-              </Text>
-            </View>
-          )}
+          renderSectionHeader={({ section }) => {
+            const isBlank = section.title === currentMonthLabel;
+            return (
+              <View
+                style={[styles.sectionHeader, isBlank && styles.sectionHeaderBlank]}
+                onLayout={(e) => handleSectionHeaderLayout(section.key, e.nativeEvent.layout.height)}
+              >
+                <Text style={styles.sectionHeaderText}>{isBlank ? "" : section.title}</Text>
+              </View>
+            );
+          }}
           renderItem={({ item }) => (
             <EventRow
               event={item}
@@ -441,6 +448,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#eee",
+  },
+  // Applied alongside sectionHeader (not instead of) when this section's
+  // month matches the dropdown — collapses the dead whitespace a blank-text
+  // header would otherwise still reserve at the labeled header's full
+  // padding.
+  sectionHeaderBlank: {
+    paddingVertical: 2,
   },
   sectionHeaderText: {
     fontSize: 15,
