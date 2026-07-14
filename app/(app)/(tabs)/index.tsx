@@ -388,7 +388,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 4, // was 8
   },
   monthPressable: {
     flexDirection: "row",
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   // header would otherwise still reserve at the labeled header's full
   // padding.
   sectionHeaderBlank: {
-    paddingVertical: 2,
+    paddingVertical: 0,
   },
   sectionHeaderText: {
     fontSize: 15,
