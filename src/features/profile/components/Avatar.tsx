@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "@/src/lib/supabase";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signOut } from "@/src/features/auth/services/auth.service";
@@ -28,12 +29,22 @@ const ROLE_LABELS: Record<string, string> = {
   MEMBER: "Member",
 };
 
-// Small circular badge in the header (top-right, present on every tab) —
+// FP-118 round 2 Grounding Check: this now sits inside CommunityBanner
+// (whose own height varies by device via the safe-area inset) rather than
+// a fixed-height native header — so, like the monthCard flyout in the
+// FP-118 round, this is a best-effort estimate of the banner's own content
+// height (below the inset), not a measured one. Combined with insets.top
+// below, it should land close, but plan on one more round of on-device
+// pixel tuning if it doesn't sit flush under the banner on your device.
+const PROFILE_CARD_BANNER_HEIGHT_ESTIMATE = 70;
+
+// Small circular badge in the banner (top-right, present on every screen) —
 // tapping it opens the Profile Card as a positioned popover anchored to
 // this badge, not a navigated screen (only "Edit Profile" pushes a real
 // route). Owns the profile fetch and the overlay's own open/close state.
 export function Avatar() {
   const { session } = useSession();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -88,7 +99,10 @@ export function Avatar() {
             card hits the card's own view first and never reaches this. */}
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} testID="profile-overlay-backdrop" />
 
-        <View style={styles.cardWrapper} testID="profile-card">
+        <View
+          style={[styles.cardWrapper, { top: insets.top + PROFILE_CARD_BANNER_HEIGHT_ESTIMATE }]}
+          testID="profile-card"
+        >
           {!profile ? (
             <Text style={styles.loading}>Loading…</Text>
           ) : (
@@ -135,7 +149,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#2563eb",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 16,
   },
   initials: {
     color: "#fff",
@@ -147,8 +160,9 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   cardWrapper: {
+    // top is set inline (insets.top + PROFILE_CARD_BANNER_HEIGHT_ESTIMATE)
+    // — see that constant's doc comment above.
     position: "absolute",
-    top: 70,
     right: 16,
     width: "60%",
     backgroundColor: "#fff",

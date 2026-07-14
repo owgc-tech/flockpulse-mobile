@@ -150,9 +150,9 @@ export default function AppLayout() {
     );
   }
 
-  // A Stack wrapping the (tabs) group (My Events / Confirmations, each with
-  // its own header + avatar) plus every screen that should push over the
-  // tab bar and hide it: event detail, self-report, and the profile edit
+  // A Stack wrapping the (tabs) group (My Events / Confirmations) plus
+  // every screen that should push over the tab bar and hide it: event
+  // detail, self-report, edit event, create event, and the profile edit
   // form. The Profile Card itself is no longer a route — Avatar.tsx now
   // renders it as a positioned popover (a Modal) owned by the avatar
   // component, not something registered here. Not a change to the gate
@@ -160,32 +160,28 @@ export default function AppLayout() {
   //
   // FP-118: CommunityBanner renders once here, above the Stack, so it's
   // present on every (app)-group screen without any individual screen
-  // having to render it itself. None of these Stack.Screen entries set a
-  // `title` anymore — native header titles are redundant now that the
-  // banner plus each screen's own body content (which already shows the
-  // relevant name/heading) covers that. (tabs)'s own _layout.tsx handles
-  // its two screens' headers separately, including preserving their bottom
-  // tab bar labels via tabBarLabel.
+  // having to render it itself — Avatar now lives inside the banner too
+  // (a global control, not tied to any one screen's subject matter),
+  // rather than per-screen headerRight.
   //
-  // FP-118 Grounding Check: omitting `title` isn't the same as guaranteeing
-  // a blank header — React Navigation falls back to the raw route segment
-  // name (the exact "(tabs)"-as-literal-text bug from the FP-115 round,
-  // fixed there with headerBackButtonDisplayMode: "minimal" on just that
-  // one screen) when no title is available anywhere in the chain. Two
-  // explicit defaults close that off for all five pushed screens at once,
-  // rather than leaving it to omission: screenOptions' headerTitle forces
-  // every header's title area genuinely blank regardless of segment-name
-  // fallback, and headerBackButtonDisplayMode forces every back button
-  // icon-only regardless of what the previous screen's (now also blank)
-  // title would otherwise resolve to for the back label. Centralized here
-  // rather than repeated per-screen since none of these five screens need a
-  // different value — Event Detail's own Stack.Screen below only adds
-  // headerRight, which is genuinely screen-owned (depends on canEdit).
+  // FP-118 round 2 Grounding Check: an earlier version of this DIP blanked
+  // `title`/`headerBackButtonDisplayMode` instead of hiding the header
+  // outright, but omitting `title` isn't the same as guaranteeing React
+  // Navigation won't fall back to the raw route segment name for it — the
+  // exact "(tabs)"-as-literal-text bug from the FP-115 round resurfaced on
+  // these five screens despite that fix. headerShown: false removes the
+  // whole category of that bug rather than chasing it screen by screen:
+  // there's no header left for React Navigation to fall back to a route
+  // name for. Each of the five pushed screens now renders its own "‹ Back"
+  // link in its own body instead (Event Detail also relocates its Edit
+  // button there, in the same row) — matching the same "subject matter
+  // owns its own controls" convention web's MemberEditForm already uses
+  // for its own "← Back to Members" link.
   return (
     <View style={styles.appShell}>
       <CommunityBanner />
-      <Stack screenOptions={{ headerTitle: () => null, headerBackButtonDisplayMode: "minimal" }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
         <Stack.Screen name="events/[id]" />
         <Stack.Screen name="events/[id]/self-report" />
         <Stack.Screen name="events/[id]/edit" />

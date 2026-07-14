@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 import { Tabs } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { Avatar } from "@/src/features/profile/components/Avatar";
 import { syncConfirmationBadge } from "@/src/features/notifications/services/confirmationBadge.service";
 import { useConfirmationBadgeCount } from "@/src/features/notifications/hooks/useConfirmationBadgeCount";
 
@@ -37,20 +36,18 @@ export default function TabsLayout() {
     return () => subscription.remove();
   }, [showConfirmations]);
 
+  // FP-118 round 2: headerShown: false (was headerRight: () => <Avatar />)
+  // — Avatar now lives in CommunityBanner, rendered once above this whole
+  // Stack/Tabs tree in (app)/_layout.tsx, not per-tab. tabBarLabel/
+  // tabBarBadge/href below are untouched — those control the bottom tab
+  // bar, which headerShown doesn't affect.
   return (
-    <Tabs screenOptions={{ headerRight: () => <Avatar /> }}>
-      {/* FP-118: title used to double as both the native header text and
-          the bottom tab bar's label (React Navigation falls back to title
-          for tabBarLabel when it isn't set explicitly) — blanking title
-          outright would've silently wiped the tab bar's own labels too.
-          tabBarLabel + headerTitle: () => null keeps the tab bar text while
-          removing just the now-redundant native header title. */}
-      <Tabs.Screen name="index" options={{ tabBarLabel: "My Events", headerTitle: () => null }} />
+    <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" options={{ tabBarLabel: "My Events" }} />
       <Tabs.Screen
         name="confirmations/index"
         options={{
           tabBarLabel: "Confirmations",
-          headerTitle: () => null,
           href: showConfirmations ? undefined : null,
           // undefined (not 0) when there's nothing pending — Tabs.Screen
           // renders a bare dot for any defined badge value, including 0.

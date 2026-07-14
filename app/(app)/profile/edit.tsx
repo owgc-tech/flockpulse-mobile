@@ -98,6 +98,9 @@ export default function EditProfileScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
+        <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+          <Text style={styles.backLinkText}>‹ Back</Text>
+        </Pressable>
         <ActivityIndicator />
       </View>
     );
@@ -105,6 +108,10 @@ export default function EditProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+        <Text style={styles.backLinkText}>‹ Back</Text>
+      </Pressable>
+
       <Text style={styles.label}>First name</Text>
       <TextInput
         style={styles.input}
@@ -226,6 +233,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
+  },
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   label: {
     fontSize: 14,

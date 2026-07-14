@@ -328,6 +328,10 @@ export default function EditEventScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+        <Text style={styles.backLinkText}>‹ Back</Text>
+      </Pressable>
+
       <Text style={styles.label}>Name</Text>
       <TextInput
         style={styles.input}
@@ -479,6 +483,15 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#fff",
     flexGrow: 1,
+  },
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   label: {
     fontSize: 14,

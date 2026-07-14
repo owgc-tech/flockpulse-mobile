@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
@@ -197,6 +197,9 @@ export default function EventDetailScreen() {
   if (parseError || !event) {
     return (
       <View style={styles.center}>
+        <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+          <Text style={styles.backLinkText}>‹ Back</Text>
+        </Pressable>
         <Text style={styles.error}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
@@ -228,17 +231,16 @@ export default function EventDetailScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen
-        options={{
-          headerRight: canEdit
-            ? () => (
-                <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </Pressable>
-              )
-            : undefined,
-        }}
-      />
+      <View style={styles.topRow}>
+        <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+          <Text style={styles.backLinkText}>‹ Back</Text>
+        </Pressable>
+        {canEdit ? (
+          <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">
+            <Text style={styles.editButtonText}>Edit</Text>
+          </Pressable>
+        ) : null}
+      </View>
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
@@ -386,8 +388,21 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     flexGrow: 1,
   },
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  backLink: {
+    alignSelf: "flex-start",
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
+  },
   editButton: {
-    marginRight: 16,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 999,
