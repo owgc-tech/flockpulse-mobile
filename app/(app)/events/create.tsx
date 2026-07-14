@@ -421,6 +421,7 @@ export default function CreateEventScreen() {
             value={iosDraftDate}
             mode="datetime"
             display="spinner"
+            themeVariant="light"
             onChange={(_event, selectedDate) => {
               if (selectedDate) setIosDraftDate(selectedDate);
             }}

@@ -173,6 +173,7 @@ export default function EditProfileScreen() {
           value={birthdate ?? new Date()}
           mode="date"
           display="spinner"
+          themeVariant="light"
           maximumDate={new Date()}
           onChange={(event, selectedDate) => {
             setShowIosDatePicker(false);
