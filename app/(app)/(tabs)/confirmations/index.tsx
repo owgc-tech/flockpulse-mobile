@@ -39,6 +39,15 @@ export default function ConfirmationsScreen() {
     try {
       const data = await listPendingConfirmations();
       setItems(data);
+      // Gated on isRefresh specifically, not the initial mount load — the
+      // tab layout's own useEffect already syncs the badge on mount, so
+      // syncing again here at the same moment would just be a redundant
+      // duplicate network hit.
+      if (isRefresh) {
+        syncConfirmationBadge().catch((err) => {
+          console.warn("Failed to sync confirmation badge:", err);
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load confirmations.");
     } finally {
