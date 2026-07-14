@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
 import { getEventById } from "@/src/features/events/services/events.service";
 import { ApiError } from "@/src/lib/api";
@@ -70,7 +70,9 @@ export default function SelfReportScreen() {
   if (parseError || !event) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: "Self-Report" }} />
+        <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+          <Text style={styles.backLinkText}>‹ Back</Text>
+        </Pressable>
         <Text style={styles.error}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
@@ -112,7 +114,9 @@ export default function SelfReportScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Self-Report" }} />
+      <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+        <Text style={styles.backLinkText}>‹ Back</Text>
+      </Pressable>
 
       <Text style={styles.name}>{event.name}</Text>
       <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
@@ -214,6 +218,15 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#fff",
     flexGrow: 1,
+  },
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   center: {
     flex: 1,

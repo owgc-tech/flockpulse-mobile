@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
@@ -98,7 +98,9 @@ export default function EditProfileScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <Stack.Screen options={{ title: "Edit Profile" }} />
+        <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+          <Text style={styles.backLinkText}>‹ Back</Text>
+        </Pressable>
         <ActivityIndicator />
       </View>
     );
@@ -106,7 +108,9 @@ export default function EditProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "Edit Profile" }} />
+      <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+        <Text style={styles.backLinkText}>‹ Back</Text>
+      </Pressable>
 
       <Text style={styles.label}>First name</Text>
       <TextInput
@@ -169,6 +173,7 @@ export default function EditProfileScreen() {
           value={birthdate ?? new Date()}
           mode="date"
           display="spinner"
+          themeVariant="light"
           maximumDate={new Date()}
           onChange={(event, selectedDate) => {
             setShowIosDatePicker(false);
@@ -229,6 +234,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#fff",
+  },
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   label: {
     fontSize: 14,

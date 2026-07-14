@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { createEvent, listMyEvents, publishEvent } from "@/src/features/events/services/events.service";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
@@ -331,7 +331,9 @@ export default function CreateEventScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: "New Event" }} />
+      <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
+        <Text style={styles.backLinkText}>‹ Back</Text>
+      </Pressable>
 
       <Text style={styles.label}>Name</Text>
       <TextInput
@@ -419,6 +421,7 @@ export default function CreateEventScreen() {
             value={iosDraftDate}
             mode="datetime"
             display="spinner"
+            themeVariant="light"
             onChange={(_event, selectedDate) => {
               if (selectedDate) setIosDraftDate(selectedDate);
             }}
@@ -497,6 +500,15 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#fff",
     flexGrow: 1,
+  },
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+  },
+  backLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
   label: {
     fontSize: 14,

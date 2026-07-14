@@ -10,6 +10,7 @@ import {
   isBiometricHardwareAvailable,
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
+import { CommunityBanner } from "@/src/features/tenant/components/CommunityBanner";
 
 type Gate =
   | { phase: "loading" }
@@ -149,22 +150,45 @@ export default function AppLayout() {
     );
   }
 
-  // A Stack wrapping the (tabs) group (My Events / Confirmations, each with
-  // its own header + avatar) plus every screen that should push over the
-  // tab bar and hide it: event detail, self-report, and the profile edit
+  // A Stack wrapping the (tabs) group (My Events / Confirmations) plus
+  // every screen that should push over the tab bar and hide it: event
+  // detail, self-report, edit event, create event, and the profile edit
   // form. The Profile Card itself is no longer a route — Avatar.tsx now
   // renders it as a positioned popover (a Modal) owned by the avatar
   // component, not something registered here. Not a change to the gate
   // above — only what renders once it says "ready".
+  //
+  // FP-118: CommunityBanner renders once here, above the Stack, so it's
+  // present on every (app)-group screen without any individual screen
+  // having to render it itself — Avatar now lives inside the banner too
+  // (a global control, not tied to any one screen's subject matter),
+  // rather than per-screen headerRight.
+  //
+  // FP-118 round 2 Grounding Check: an earlier version of this DIP blanked
+  // `title`/`headerBackButtonDisplayMode` instead of hiding the header
+  // outright, but omitting `title` isn't the same as guaranteeing React
+  // Navigation won't fall back to the raw route segment name for it — the
+  // exact "(tabs)"-as-literal-text bug from the FP-115 round resurfaced on
+  // these five screens despite that fix. headerShown: false removes the
+  // whole category of that bug rather than chasing it screen by screen:
+  // there's no header left for React Navigation to fall back to a route
+  // name for. Each of the five pushed screens now renders its own "‹ Back"
+  // link in its own body instead (Event Detail also relocates its Edit
+  // button there, in the same row) — matching the same "subject matter
+  // owns its own controls" convention web's MemberEditForm already uses
+  // for its own "← Back to Members" link.
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="events/[id]" options={{ title: "Event" }} />
-      <Stack.Screen name="events/[id]/self-report" options={{ title: "Self-Report" }} />
-      <Stack.Screen name="events/[id]/edit" options={{ title: "Edit Event" }} />
-      <Stack.Screen name="events/create" options={{ title: "New Event" }} />
-      <Stack.Screen name="profile/edit" options={{ title: "Edit Profile" }} />
-    </Stack>
+    <View style={styles.appShell}>
+      <CommunityBanner />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="events/[id]" />
+        <Stack.Screen name="events/[id]/self-report" />
+        <Stack.Screen name="events/[id]/edit" />
+        <Stack.Screen name="events/create" />
+        <Stack.Screen name="profile/edit" />
+      </Stack>
+    </View>
   );
 }
 
@@ -189,6 +213,9 @@ function BiometricLockScreen({
 }
 
 const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+  },
   center: {
     flex: 1,
     justifyContent: "center",

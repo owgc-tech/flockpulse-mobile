@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import {
   listPendingConfirmations,
   submitConfirmation,
@@ -30,17 +30,29 @@ function formatEventRange(startIso: string, endIso: string): string {
 export default function ConfirmationsScreen() {
   const [items, setItems] = useState<PendingConfirmationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setIsRefreshing(true);
     setError(null);
     try {
       const data = await listPendingConfirmations();
       setItems(data);
+      // Gated on isRefresh specifically, not the initial mount load — the
+      // tab layout's own useEffect already syncs the badge on mount, so
+      // syncing again here at the same moment would just be a redundant
+      // duplicate network hit.
+      if (isRefresh) {
+        syncConfirmationBadge().catch((err) => {
+          console.warn("Failed to sync confirmation badge:", err);
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load confirmations.");
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
@@ -75,6 +87,7 @@ export default function ConfirmationsScreen() {
           contentContainerStyle={styles.listContent}
           data={items}
           keyExtractor={(item) => item.self_report_id}
+          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => load(true)} />}
           ListEmptyComponent={
             <View style={styles.center}>
               <Text style={styles.empty}>No pending confirmations</Text>

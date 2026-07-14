@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
@@ -82,10 +82,12 @@ function EventRow({
 // onScrollToIndexFailed below as the safety net for jumps that land on a
 // still-unmeasured section.
 const ESTIMATED_ROW_HEIGHT = 140;
-// sectionHeader's style is fixed padding (10 top + 10 bottom) plus one
-// line of 15px bold text — genuinely static, unlike rows, but still
-// measured once via onLayout rather than hand-computed from the
-// stylesheet, so it can't silently drift out of sync with styles.sectionHeader.
+// This is specifically the *labeled* header's estimate (fixed padding, 10
+// top + 10 bottom, plus one line of 15px bold text) — the blank header a
+// section gets once its month matches the dropdown (see sectionHeaderBlank)
+// is genuinely shorter, so headers are no longer assumed uniform (see
+// sectionHeaderHeightsRef below). Used only as a fallback before a given
+// section has rendered and measured itself once, not a universal height.
 const ESTIMATED_SECTION_HEADER_HEIGHT = 41;
 
 export default function MyEventsScreen() {
@@ -106,12 +108,16 @@ export default function MyEventsScreen() {
   const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
   const sections = useMemo(() => groupEventsByMonth(events), [events]);
 
-  // Measured heights, keyed by event id (rows) — a single ref for the
-  // section header since its height is uniform across sections. `layoutTick`
-  // forces the itemLayouts memo below to recompute after a measurement comes
-  // in (refs alone don't trigger a re-render).
+  // Measured heights, keyed by event id (rows) and by section key (headers).
+  // Headers are keyed per-section rather than sharing one ref because a
+  // blank header (its month currently matches the dropdown — see
+  // sectionHeaderBlank) is genuinely shorter than a labeled one; assuming
+  // one uniform height across all sections would throw off getItemLayout's
+  // math for whichever sections don't match that assumption. `layoutTick`
+  // forces the itemLayouts memo below to recompute after a measurement
+  // comes in (refs alone don't trigger a re-render).
   const rowHeightsRef = useRef<Map<string, number>>(new Map());
-  const sectionHeaderHeightRef = useRef<number | null>(null);
+  const sectionHeaderHeightsRef = useRef<Map<string, number>>(new Map());
   const [layoutTick, setLayoutTick] = useState(0);
 
   const handleRowLayout = useCallback((eventId: string, height: number) => {
@@ -120,9 +126,9 @@ export default function MyEventsScreen() {
     setLayoutTick((t) => t + 1);
   }, []);
 
-  const handleSectionHeaderLayout = useCallback((height: number) => {
-    if (sectionHeaderHeightRef.current === height) return;
-    sectionHeaderHeightRef.current = height;
+  const handleSectionHeaderLayout = useCallback((sectionKey: string, height: number) => {
+    if (sectionHeaderHeightsRef.current.get(sectionKey) === height) return;
+    sectionHeaderHeightsRef.current.set(sectionKey, height);
     setLayoutTick((t) => t + 1);
   }, []);
 
@@ -132,9 +138,9 @@ export default function MyEventsScreen() {
   const itemLayouts = useMemo(() => {
     const layouts: { length: number; offset: number }[] = [];
     let offset = 0;
-    const headerHeight = sectionHeaderHeightRef.current ?? ESTIMATED_SECTION_HEADER_HEIGHT;
 
     for (const section of sections) {
+      const headerHeight = sectionHeaderHeightsRef.current.get(section.key) ?? ESTIMATED_SECTION_HEADER_HEIGHT;
       layouts.push({ length: headerHeight, offset });
       offset += headerHeight;
       for (const item of section.data) {
@@ -265,31 +271,6 @@ export default function MyEventsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* headerTitle cleared and headerLeft supplies a tappable,
-          scroll-synced month dropdown — headerRight (avatar) stays whatever
-          (tabs)/_layout.tsx's shared screenOptions already supplies,
-          untouched here. */}
-      <Stack.Screen
-        options={{
-          headerTitle: () => null,
-          headerLeft: () => (
-            <View style={styles.headerLeft}>
-              <Pressable
-                style={styles.monthPressable}
-                onPress={() => setIsMonthPickerOpen(true)}
-                disabled={sections.length === 0}
-                testID="month-dropdown"
-              >
-                <Text style={styles.monthLabel}>
-                  {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                </Text>
-                {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
-              </Pressable>
-            </View>
-          ),
-        }}
-      />
-
       <Modal
         visible={isMonthPickerOpen}
         transparent
@@ -319,6 +300,24 @@ export default function MyEventsScreen() {
         </View>
       </Modal>
 
+      {/* FP-118: relocated from the native header's headerLeft (now that
+          headerTitle/headerLeft is no longer used app-wide) into the body,
+          directly above the list — same Pressable/Modal/picker state as
+          before, just moved. */}
+      <View style={styles.monthDropdownRow}>
+        <Pressable
+          style={styles.monthPressable}
+          onPress={() => setIsMonthPickerOpen(true)}
+          disabled={sections.length === 0}
+          testID="month-dropdown"
+        >
+          <Text style={styles.monthLabel}>
+            {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          </Text>
+          {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
+        </Pressable>
+      </View>
+
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
@@ -345,16 +344,17 @@ export default function MyEventsScreen() {
               <Text style={styles.empty}>No upcoming events</Text>
             </View>
           }
-          renderSectionHeader={({ section }) => (
-            <View
-              style={styles.sectionHeader}
-              onLayout={(e) => handleSectionHeaderLayout(e.nativeEvent.layout.height)}
-            >
-              <Text style={styles.sectionHeaderText}>
-                {section.title !== currentMonthLabel ? section.title : ""}
-              </Text>
-            </View>
-          )}
+          renderSectionHeader={({ section }) => {
+            const isBlank = section.title === currentMonthLabel;
+            return (
+              <View
+                style={[styles.sectionHeader, isBlank && styles.sectionHeaderBlank]}
+                onLayout={(e) => handleSectionHeaderLayout(section.key, e.nativeEvent.layout.height)}
+              >
+                <Text style={styles.sectionHeaderText}>{isBlank ? "" : section.title}</Text>
+              </View>
+            );
+          }}
           renderItem={({ item }) => (
             <EventRow
               event={item}
@@ -383,11 +383,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  headerLeft: {
+  monthDropdownRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 8,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4, // was 8
   },
   monthPressable: {
     flexDirection: "row",
@@ -408,7 +409,15 @@ const styles = StyleSheet.create({
   },
   monthCard: {
     position: "absolute",
-    top: 70,
+    // FP-118 Grounding Check: this was calibrated for the dropdown's old
+    // position embedded in the native header; now that it's relocated into
+    // the body (below CommunityBanner + the still-present-but-blank-title
+    // native header row), it needs to anchor further down. This value is a
+    // best-effort estimate, not a measured one — needs on-device
+    // confirmation that the card still visually anchors just under the
+    // dropdown across device sizes/safe-area insets, same fiddly-pixel
+    // caveat as the month-scroll tuning elsewhere in this screen.
+    top: 150,
     left: 16,
     width: "60%",
     maxHeight: "60%",
@@ -439,6 +448,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#eee",
+  },
+  // Applied alongside sectionHeader (not instead of) when this section's
+  // month matches the dropdown — collapses the dead whitespace a blank-text
+  // header would otherwise still reserve at the labeled header's full
+  // padding.
+  sectionHeaderBlank: {
+    paddingVertical: 0,
   },
   sectionHeaderText: {
     fontSize: 15,
