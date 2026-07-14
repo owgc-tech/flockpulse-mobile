@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
@@ -194,6 +194,30 @@ export default function EventDetailScreen() {
     });
   }, [event?.id, event?.prayer_leader_member_id, event?.food_assignment, event?.talk_id]);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [rosterRefreshTrigger, setRosterRefreshTrigger] = useState(0);
+
+  // Pull-to-refresh needs to re-trigger every independent piece of this
+  // screen's data, not just the event: re-fetching and merging the event
+  // object already covers the Prayer Leader/Food Assignment/Formation Talk
+  // lookups (their own useEffect above is keyed on the relevant event
+  // fields, so it re-runs automatically if those actually changed) — but
+  // Roster lives in its own nested component with its own fetch, so it
+  // needs an explicit trigger bump to know to reload.
+  const handleRefresh = useCallback(async () => {
+    if (!params.id) return;
+    setIsRefreshing(true);
+    try {
+      const fresh = await getEventById(params.id);
+      setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+    } catch (err) {
+      console.warn("Failed to refresh event:", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+    setRosterRefreshTrigger((t) => t + 1);
+  }, [params.id]);
+
   if (parseError || !event) {
     return (
       <View style={styles.center}>
@@ -230,7 +254,10 @@ export default function EventDetailScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
+    >
       <View style={styles.topRow}>
         <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
           <Text style={styles.backLinkText}>‹ Back</Text>
@@ -308,7 +335,7 @@ export default function EventDetailScreen() {
       {showRoster ? (
         <>
           <View style={styles.divider} />
-          <RosterSection eventId={event.id} />
+          <RosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} />
         </>
       ) : null}
     </ScrollView>
@@ -350,7 +377,7 @@ function RsvpSection({
   );
 }
 
-function RosterSection({ eventId }: { eventId: string }) {
+function RosterSection({ eventId, refreshTrigger }: { eventId: string; refreshTrigger: number }) {
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -366,7 +393,7 @@ function RosterSection({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     loadRoster();
-  }, [loadRoster]);
+  }, [loadRoster, refreshTrigger]);
 
   return (
     <View>
