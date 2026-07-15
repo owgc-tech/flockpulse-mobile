@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -205,9 +205,11 @@ function FormationTalkPicker({
 // only these two screens consume it.
 function MeetingResourcePicker({
   resourceLabel,
+  selectedResourceId,
   onChange,
 }: {
   resourceLabel: string | undefined;
+  selectedResourceId: string | undefined;
   onChange: (resourceId: string | undefined, label: string | undefined) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -268,11 +270,13 @@ function MeetingResourcePicker({
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={styles.optionRow}
+                  style={[styles.optionRow, item.id === selectedResourceId && styles.optionRowSelected]}
                   onPress={() => handleSelect(item)}
                   testID={`meeting-resource-${item.id}`}
                 >
-                  <Text style={styles.optionLabel}>{item.name}</Text>
+                  <Text style={[styles.optionLabel, item.id === selectedResourceId && styles.optionLabelSelected]}>
+                    {item.name}
+                  </Text>
                 </Pressable>
               )}
             />
@@ -312,11 +316,10 @@ export default function EditEventScreen() {
   const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState<string | undefined>(
     initialEvent.online_meeting_resource_id ?? undefined
   );
-  // Same placeholder-label convention as talkLabel below: the event only
-  // carries the resource id, not its display name — resolving that would
-  // mean fetching the full meeting-resource list just to find a match.
-  // Opening the picker to actually change it always produces an accurate
-  // label.
+  // Placeholder until the resolve-on-mount effect below replaces it with the
+  // real name — same "id only, no display name on the event itself" gap as
+  // talkLabel below, but here it's worth resolving eagerly (rather than only
+  // on picker-open) since the list of tracked Zoom accounts is small.
   const [onlineMeetingResourceLabel, setOnlineMeetingResourceLabel] = useState<string | undefined>(
     initialEvent.online_meeting_resource_id ? "Zoom account selected (tap to change)" : undefined
   );
@@ -344,6 +347,18 @@ export default function EditEventScreen() {
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!initialEvent.online_meeting_resource_id) return;
+    listMeetingResources()
+      .then((resources) => {
+        const match = resources.find((r) => r.id === initialEvent.online_meeting_resource_id);
+        if (match) setOnlineMeetingResourceLabel(match.name);
+      })
+      .catch(() => {
+        // Leave the existing placeholder if this fails — non-fatal.
+      });
+  }, []);
 
   const openDateTimePicker = (which: "start" | "end") => {
     const current = (which === "start" ? startDatetime : endDatetime) ?? new Date();
@@ -577,6 +592,7 @@ export default function EditEventScreen() {
       {meetingMode === "zoom" ? (
         <MeetingResourcePicker
           resourceLabel={onlineMeetingResourceLabel}
+          selectedResourceId={onlineMeetingResourceId}
           onChange={(id, label) => {
             setOnlineMeetingResourceId(id);
             setOnlineMeetingResourceLabel(label);
@@ -785,5 +801,12 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 15,
     color: "#333",
+  },
+  optionRowSelected: {
+    backgroundColor: "#eff6ff",
+  },
+  optionLabelSelected: {
+    color: "#2563eb",
+    fontWeight: "700",
   },
 });

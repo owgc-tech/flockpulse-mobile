@@ -202,9 +202,11 @@ function FormationTalkPicker({
 // drill-down since meeting resources have no such hierarchy.
 function MeetingResourcePicker({
   resourceLabel,
+  selectedResourceId,
   onChange,
 }: {
   resourceLabel: string | undefined;
+  selectedResourceId: string | undefined;
   onChange: (resourceId: string | undefined, label: string | undefined) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -265,11 +267,13 @@ function MeetingResourcePicker({
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={styles.optionRow}
+                  style={[styles.optionRow, item.id === selectedResourceId && styles.optionRowSelected]}
                   onPress={() => handleSelect(item)}
                   testID={`meeting-resource-${item.id}`}
                 >
-                  <Text style={styles.optionLabel}>{item.name}</Text>
+                  <Text style={[styles.optionLabel, item.id === selectedResourceId && styles.optionLabelSelected]}>
+                    {item.name}
+                  </Text>
                 </Pressable>
               )}
             />
@@ -588,6 +592,7 @@ export default function CreateEventScreen() {
       {meetingMode === "zoom" ? (
         <MeetingResourcePicker
           resourceLabel={onlineMeetingResourceLabel}
+          selectedResourceId={onlineMeetingResourceId}
           onChange={(id, label) => {
             setOnlineMeetingResourceId(id);
             setOnlineMeetingResourceLabel(label);
@@ -796,5 +801,12 @@ const styles = StyleSheet.create({
   optionLabel: {
     fontSize: 15,
     color: "#333",
+  },
+  optionRowSelected: {
+    backgroundColor: "#eff6ff",
+  },
+  optionLabelSelected: {
+    color: "#2563eb",
+    fontWeight: "700",
   },
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import {
@@ -158,22 +158,27 @@ export default function EventDetailScreen() {
 
   // The initial event object came baked into a notification's data payload
   // at scheduling time (or route params from the list screen) — it can be
-  // stale if the event was edited/cancelled since. Fresh-fetch on open and
-  // merge over what's already rendered so the baked-in data only ever
-  // avoids a blank flash, never what the user actually ends up seeing.
-  // getEventById() doesn't return rsvp_status/rsvp_reason (only
-  // /api/events/mine does), so spreading it over the previous state can't
-  // clobber those fields even though it runs after the initial parse.
-  useEffect(() => {
-    if (!params.id) return;
-    getEventById(params.id)
-      .then((fresh) => {
-        setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
-      })
-      .catch((err) => {
-        console.warn("Failed to fresh-fetch event:", err);
-      });
-  }, [params.id]);
+  // stale if the event was edited/cancelled since. Fresh-fetch on every
+  // focus (not just mount) and merge over what's already rendered, so
+  // returning to this screen after editing elsewhere (e.g. the Edit form,
+  // which navigates back via router.back() rather than a fresh push) also
+  // picks up the change — FP-120-mobile-adj-1: a mount-only fetch missed
+  // that return-from-edit case. getEventById() doesn't return
+  // rsvp_status/rsvp_reason (only /api/events/mine does), so spreading it
+  // over the previous state can't clobber those fields even though it runs
+  // after the initial parse.
+  useFocusEffect(
+    useCallback(() => {
+      if (!params.id) return;
+      getEventById(params.id)
+        .then((fresh) => {
+          setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+        })
+        .catch((err) => {
+          console.warn("Failed to fresh-fetch event:", err);
+        });
+    }, [params.id])
+  );
 
   // Prayer Leader / Food Assignment / Formation Talk are three independent
   // lookups — Promise.allSettled (not sequential awaits) so one failing
@@ -290,7 +295,7 @@ export default function EventDetailScreen() {
     ? (meetingResource?.join_url ?? null)
     : event.online_meeting_url;
   const onlineMeetingLabel = event.online_meeting_resource_id
-    ? (meetingResource?.name ?? "Join Meeting")
+    ? `Zoom: ${meetingResource?.name ?? "Join Meeting"}`
     : event.online_meeting_platform_label || "Join Meeting";
 
   return (
