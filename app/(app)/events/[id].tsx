@@ -3,13 +3,25 @@ import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, Styl
 import { router, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
+import {
+  getEventById,
+  getEventRoster,
+  listMeetingResources,
+  submitRsvp,
+} from "@/src/features/events/services/events.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
-import type { EventDetail, EventTargetSelector, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type {
+  EventDetail,
+  EventTargetSelector,
+  MeetingResource,
+  MyEvent,
+  RosterEntry,
+  RsvpStatus,
+} from "@/src/features/events/types";
 import type { EventReminderFormation } from "@/src/features/notifications/types";
 
 // GET /api/members / GET /api/groups response rows, filtered down via
@@ -107,6 +119,7 @@ export default function EventDetailScreen() {
   const [prayerLeaderName, setPrayerLeaderName] = useState<string | null>(null);
   const [foodAssignmentNames, setFoodAssignmentNames] = useState<string | null>(null);
   const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
+  const [meetingResource, setMeetingResource] = useState<MeetingResource | null>(null);
   // Distinguishes "still fetching" from "fetched, nothing to show" (e.g. the
   // prayer leader lookup rejected outright) — without this, a rejected
   // lookup would leave its section reading "Loading…" forever instead of
@@ -179,7 +192,15 @@ export default function EventDetailScreen() {
         : Promise.resolve(null),
       event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
       event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
-    ]).then(([prayerResult, foodResult, talkResult]) => {
+      // Only the id is on the event itself — the display name and actual
+      // join_url live on the tracked resource, same reasoning as the
+      // Prayer Leader/Food Assignment id-to-name lookups above.
+      event.online_meeting_resource_id
+        ? listMeetingResources().then(
+            (resources) => resources.find((r) => r.id === event.online_meeting_resource_id) ?? null
+          )
+        : Promise.resolve(null),
+    ]).then(([prayerResult, foodResult, talkResult, meetingResourceResult]) => {
       if (prayerResult.status === "fulfilled" && prayerResult.value) {
         const member = prayerResult.value;
         setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
@@ -190,9 +211,18 @@ export default function EventDetailScreen() {
       if (talkResult.status === "fulfilled" && talkResult.value?.formation) {
         setFormationTalk(talkResult.value.formation);
       }
+      if (meetingResourceResult.status === "fulfilled" && meetingResourceResult.value) {
+        setMeetingResource(meetingResourceResult.value);
+      }
       setContextLookupsSettled(true);
     });
-  }, [event?.id, event?.prayer_leader_member_id, event?.food_assignment, event?.talk_id]);
+  }, [
+    event?.id,
+    event?.prayer_leader_member_id,
+    event?.food_assignment,
+    event?.talk_id,
+    event?.online_meeting_resource_id,
+  ]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [rosterRefreshTrigger, setRosterRefreshTrigger] = useState(0);
@@ -253,6 +283,16 @@ export default function EventDetailScreen() {
     });
   };
 
+  // Resource-booked meetings resolve their join link/label from the tracked
+  // resource (looked up above); freeform-platform meetings already carry
+  // both directly on the event.
+  const onlineMeetingLink = event.online_meeting_resource_id
+    ? (meetingResource?.join_url ?? null)
+    : event.online_meeting_url;
+  const onlineMeetingLabel = event.online_meeting_resource_id
+    ? (meetingResource?.name ?? "Join Meeting")
+    : event.online_meeting_platform_label || "Join Meeting";
+
   return (
     <ScrollView
       contentContainerStyle={styles.container}
@@ -283,6 +323,20 @@ export default function EventDetailScreen() {
         <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
         <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
       </Pressable>
+
+      {onlineMeetingLink ? (
+        <Pressable
+          style={styles.locationPressable}
+          onPress={() => Linking.openURL(onlineMeetingLink)}
+          testID="event-detail-online-meeting"
+        >
+          <Text style={[styles.meta, styles.locationLink]}>{onlineMeetingLabel}</Text>
+        </Pressable>
+      ) : event.online_meeting_resource_id ? (
+        <Text style={styles.metaSecondary}>
+          {contextLookupsSettled ? "Online meeting link not available" : "Loading…"}
+        </Text>
+      ) : null}
 
       <View style={styles.divider} />
 

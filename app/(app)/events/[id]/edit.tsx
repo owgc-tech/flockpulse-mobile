@@ -13,7 +13,8 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
+import { ApiError } from "@/src/lib/api";
+import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import {
   formationDisplayName,
   listCourses,
@@ -26,7 +27,7 @@ import { reconcileConfirmationReminders } from "@/src/features/notifications/ser
 import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
-import type { EventDetail } from "@/src/features/events/types";
+import type { EventDetail, MeetingResource } from "@/src/features/events/types";
 
 const EMPTY_SELECTION: TargetSelection = { group_ids: [], member_ids: [] };
 
@@ -197,6 +198,91 @@ function FormationTalkPicker({
   );
 }
 
+// Mirrors FormationTalkPicker's modal-list convention (open button + slide-up
+// Modal + FlatList), single-level rather than a course/module/talk
+// drill-down since meeting resources have no such hierarchy. Duplicated from
+// create.tsx for the same reason FormationTalkPicker is duplicated above —
+// only these two screens consume it.
+function MeetingResourcePicker({
+  resourceLabel,
+  onChange,
+}: {
+  resourceLabel: string | undefined;
+  onChange: (resourceId: string | undefined, label: string | undefined) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [resources, setResources] = useState<MeetingResource[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openPicker = () => {
+    setIsOpen(true);
+    setIsLoading(true);
+    setError(null);
+    listMeetingResources()
+      .then(setResources)
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load Zoom accounts."))
+      .finally(() => setIsLoading(false));
+  };
+
+  const handleSelect = (resource: MeetingResource) => {
+    onChange(resource.id, resource.name);
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onChange(undefined, undefined);
+    setIsOpen(false);
+  };
+
+  return (
+    <View>
+      <Text style={styles.label}>Zoom Account</Text>
+      <Pressable style={styles.input} onPress={openPicker} testID="meeting-resource-open">
+        <Text>{resourceLabel ?? "None"}</Text>
+      </Pressable>
+
+      <Modal visible={isOpen} animationType="slide" onRequestClose={() => setIsOpen(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Zoom Account</Text>
+            <Pressable onPress={() => setIsOpen(false)} testID="meeting-resource-close">
+              <Text style={styles.doneText}>Cancel</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.modalActionsRow}>
+            <View />
+            <Pressable onPress={handleClear} testID="meeting-resource-clear">
+              <Text style={styles.linkText}>Clear selection</Text>
+            </Pressable>
+          </View>
+
+          {isLoading ? (
+            <ActivityIndicator style={styles.center} />
+          ) : error ? (
+            <Text style={styles.error}>{error}</Text>
+          ) : (
+            <FlatList
+              data={resources}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <Pressable
+                  style={styles.optionRow}
+                  onPress={() => handleSelect(item)}
+                  testID={`meeting-resource-${item.id}`}
+                >
+                  <Text style={styles.optionLabel}>{item.name}</Text>
+                </Pressable>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 export default function EditEventScreen() {
   const params = useLocalSearchParams<{ id: string; event?: string }>();
 
@@ -220,6 +306,24 @@ export default function EditEventScreen() {
   const [locationName, setLocationName] = useState(initialEvent.location_name ?? "");
   const [locationAddress, setLocationAddress] = useState(initialEvent.location_address ?? "");
   const [locationUrl, setLocationUrl] = useState(initialEvent.location_url ?? "");
+  const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">(
+    initialEvent.online_meeting_resource_id ? "zoom" : initialEvent.online_meeting_url ? "other" : "none"
+  );
+  const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState<string | undefined>(
+    initialEvent.online_meeting_resource_id ?? undefined
+  );
+  // Same placeholder-label convention as talkLabel below: the event only
+  // carries the resource id, not its display name — resolving that would
+  // mean fetching the full meeting-resource list just to find a match.
+  // Opening the picker to actually change it always produces an accurate
+  // label.
+  const [onlineMeetingResourceLabel, setOnlineMeetingResourceLabel] = useState<string | undefined>(
+    initialEvent.online_meeting_resource_id ? "Zoom account selected (tap to change)" : undefined
+  );
+  const [onlineMeetingPlatformLabel, setOnlineMeetingPlatformLabel] = useState(
+    initialEvent.online_meeting_platform_label ?? ""
+  );
+  const [onlineMeetingUrl, setOnlineMeetingUrl] = useState(initialEvent.online_meeting_url ?? "");
   const [target, setTarget] = useState<TargetSelection>(targetToSelection(initialEvent.target));
   const [talkId, setTalkId] = useState<string | undefined>(initialEvent.talk_id ?? undefined);
   // The event only carries talk_id, not the Course › Module › Talk display
@@ -294,6 +398,10 @@ export default function EditEventScreen() {
         locationName: locationName.trim(),
         locationAddress: locationAddress.trim(),
         locationUrl: locationUrl.trim() ? locationUrl.trim() : null,
+        onlineMeetingResourceId: meetingMode === "zoom" ? (onlineMeetingResourceId ?? null) : null,
+        onlineMeetingUrl: meetingMode === "other" && onlineMeetingUrl.trim() ? onlineMeetingUrl.trim() : null,
+        onlineMeetingPlatformLabel:
+          meetingMode === "other" && onlineMeetingPlatformLabel.trim() ? onlineMeetingPlatformLabel.trim() : null,
         target,
         talkId: talkId ?? null,
         prayerLeaderMemberId: prayerLeader.member_ids[0] ?? null,
@@ -320,7 +428,15 @@ export default function EditEventScreen() {
       );
       router.back();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update event.");
+      if (err instanceof ApiError && err.code === "MEETING_RESOURCE_CONFLICT" && err.conflict) {
+        const c = err.conflict;
+        setError(
+          `Zoom account selected is already booked for "${c.eventName}" on ` +
+            `${new Date(c.startDatetime).toLocaleString()} by ${c.bookedByName}.`
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to update event.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -441,6 +557,57 @@ export default function EditEventScreen() {
         testID="edit-event-location-url"
       />
 
+      <Text style={styles.label}>Online Meeting (optional)</Text>
+      <View style={styles.optionsRow}>
+        {(["none", "zoom", "other"] as const).map((mode) => (
+          <Pressable
+            key={mode}
+            style={[styles.optionButton, meetingMode === mode && styles.optionButtonSelected]}
+            onPress={() => setMeetingMode(mode)}
+            disabled={isSubmitting}
+            testID={`edit-event-meeting-mode-${mode}`}
+          >
+            <Text style={[styles.optionText, meetingMode === mode && styles.optionTextSelected]}>
+              {mode === "none" ? "None" : mode === "zoom" ? "Zoom Account" : "Other Platform"}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {meetingMode === "zoom" ? (
+        <MeetingResourcePicker
+          resourceLabel={onlineMeetingResourceLabel}
+          onChange={(id, label) => {
+            setOnlineMeetingResourceId(id);
+            setOnlineMeetingResourceLabel(label);
+          }}
+        />
+      ) : null}
+
+      {meetingMode === "other" ? (
+        <>
+          <Text style={styles.label}>Platform Name</Text>
+          <TextInput
+            style={styles.input}
+            value={onlineMeetingPlatformLabel}
+            onChangeText={setOnlineMeetingPlatformLabel}
+            editable={!isSubmitting}
+            placeholder="e.g. Google Meet"
+            testID="edit-event-meeting-platform-label"
+          />
+
+          <Text style={styles.label}>Meeting Link</Text>
+          <TextInput
+            style={styles.input}
+            value={onlineMeetingUrl}
+            onChangeText={setOnlineMeetingUrl}
+            editable={!isSubmitting}
+            autoCapitalize="none"
+            testID="edit-event-meeting-url"
+          />
+        </>
+      ) : null}
+
       <MemberGroupPicker label="Target Audience" value={target} onChange={setTarget} />
 
       <FormationTalkPicker
@@ -507,6 +674,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  optionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#e5e7eb",
+  },
+  optionButtonSelected: {
+    backgroundColor: "#2563eb",
+  },
+  optionText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  optionTextSelected: {
+    color: "#fff",
   },
   submitButton: {
     backgroundColor: "#2563eb",
