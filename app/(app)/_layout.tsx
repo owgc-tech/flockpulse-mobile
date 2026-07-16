@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
@@ -11,6 +11,22 @@ import {
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
 import { CommunityBanner } from "@/src/features/tenant/components/CommunityBanner";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays. `center` is
+// shared by the loading spinner and the biometric-lock screen, both of which
+// are the first thing a user sees on a cold app open — worth getting right.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: { backgroundColor: colors.background },
+    title: { color: colors.text },
+    button: { backgroundColor: colors.accent },
+    linkText: { color: colors.accent },
+  });
+}
 
 type Gate =
   | { phase: "loading" }
@@ -20,6 +36,8 @@ type Gate =
 
 export default function AppLayout() {
   const { session, isLoading } = useSession();
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [gate, setGate] = useState<Gate>({ phase: "loading" });
   // FP-96-FP-97-adj-1: session?.access_token is a dependency below (needed
   // to notice an aal-level change after mfa-verify/mfa-enroll), but
@@ -119,7 +137,7 @@ export default function AppLayout() {
 
   if (gate.phase === "loading") {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, themed.center]}>
         <ActivityIndicator />
       </View>
     );
@@ -132,6 +150,7 @@ export default function AppLayout() {
   if (gate.phase === "biometric-lock") {
     return (
       <BiometricLockScreen
+        themed={themed}
         onRetry={async () => {
           const success = await authenticateWithBiometrics();
           if (success) {
@@ -195,18 +214,20 @@ export default function AppLayout() {
 function BiometricLockScreen({
   onRetry,
   onUsePasswordInstead,
+  themed,
 }: {
   onRetry: () => void;
   onUsePasswordInstead: () => void;
+  themed: ReturnType<typeof getThemedStyles>;
 }) {
   return (
-    <View style={styles.center}>
-      <Text style={styles.title}>Unlock FlockPulse</Text>
-      <Pressable style={styles.button} onPress={onRetry} testID="biometric-retry">
+    <View style={[styles.center, themed.center]}>
+      <Text style={[styles.title, themed.title]}>Unlock FlockPulse</Text>
+      <Pressable style={[styles.button, themed.button]} onPress={onRetry} testID="biometric-retry">
         <Text style={styles.buttonText}>Try Again</Text>
       </Pressable>
       <Pressable style={styles.linkButton} onPress={onUsePasswordInstead} testID="biometric-use-password">
-        <Text style={styles.linkText}>Use password instead</Text>
+        <Text style={[styles.linkText, themed.linkText]}>Use password instead</Text>
       </Pressable>
     </View>
   );

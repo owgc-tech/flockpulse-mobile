@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,6 +7,8 @@ import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { MyProfile } from "@/src/features/members/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 function getInitials(firstName: string, lastName: string): string {
   const first = firstName.trim().charAt(0).toUpperCase();
@@ -38,6 +40,23 @@ const ROLE_LABELS: Record<string, string> = {
 // pixel tuning if it doesn't sit flush under the banner on your device.
 const PROFILE_CARD_BANNER_HEIGHT_ESTIMATE = 70;
 
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays. avatar/
+// avatarLarge/editButton stay accent-colored buttons/badges with white text
+// in both themes (untouched, same precedent as other screens' FABs).
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    cardWrapper: { backgroundColor: colors.cardBackground },
+    loading: { color: colors.textSecondary },
+    name: { color: colors.text },
+    role: { color: colors.textSecondary },
+    groupsHeading: { color: colors.text },
+    groupText: { color: colors.textSecondary },
+    signOutText: { color: colors.danger },
+  });
+}
+
 // Small circular badge in the banner (top-right, present on every screen) —
 // tapping it opens the Profile Card as a positioned popover anchored to
 // this badge, not a navigated screen (only "Edit Profile" pushes a real
@@ -45,6 +64,8 @@ const PROFILE_CARD_BANNER_HEIGHT_ESTIMATE = 70;
 export function Avatar() {
   const { session } = useSession();
   const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -100,26 +121,26 @@ export function Avatar() {
         <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)} testID="profile-overlay-backdrop" />
 
         <View
-          style={[styles.cardWrapper, { top: insets.top + PROFILE_CARD_BANNER_HEIGHT_ESTIMATE }]}
+          style={[styles.cardWrapper, themed.cardWrapper, { top: insets.top + PROFILE_CARD_BANNER_HEIGHT_ESTIMATE }]}
           testID="profile-card"
         >
           {!profile ? (
-            <Text style={styles.loading}>Loading…</Text>
+            <Text style={[styles.loading, themed.loading]}>Loading…</Text>
           ) : (
             <>
               <View style={styles.avatarLarge}>
                 <Text style={styles.avatarLargeInitials}>{initials}</Text>
               </View>
-              <Text style={styles.name}>
+              <Text style={[styles.name, themed.name]}>
                 {profile.first_name} {profile.last_name}
               </Text>
-              {roleLabel ? <Text style={styles.role}>{roleLabel}</Text> : null}
+              {roleLabel ? <Text style={[styles.role, themed.role]}>{roleLabel}</Text> : null}
 
               {profile.groups.length > 0 ? (
                 <View style={styles.groupsSection}>
-                  <Text style={styles.groupsHeading}>Groups</Text>
+                  <Text style={[styles.groupsHeading, themed.groupsHeading]}>Groups</Text>
                   {profile.groups.map((group) => (
-                    <Text key={group.id} style={styles.groupText}>
+                    <Text key={group.id} style={[styles.groupText, themed.groupText]}>
                       {group.name}
                     </Text>
                   ))}
@@ -131,7 +152,7 @@ export function Avatar() {
               </Pressable>
 
               <Pressable onPress={handleSignOut} style={styles.signOutLink} testID="sign-out">
-                <Text style={styles.signOutText}>Sign Out</Text>
+                <Text style={[styles.signOutText, themed.signOutText]}>Sign Out</Text>
               </Pressable>
             </>
           )}

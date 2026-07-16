@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
@@ -23,6 +23,30 @@ import type {
   RsvpStatus,
 } from "@/src/features/events/types";
 import type { EventReminderFormation } from "@/src/features/notifications/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    backLinkText: { color: colors.accent },
+    editButton: { backgroundColor: colors.accent + "22" },
+    editButtonText: { color: colors.accent },
+    center: { backgroundColor: colors.background },
+    name: { color: colors.text },
+    meta: { color: colors.text },
+    metaSecondary: { color: colors.textSecondary },
+    locationLink: { color: colors.accent },
+    divider: { backgroundColor: colors.divider },
+    sectionTitle: { color: colors.text },
+    fieldLabel: { color: colors.text },
+    fieldValue: { color: colors.text },
+    error: { color: colors.danger },
+  });
+}
 
 // GET /api/members / GET /api/groups response rows, filtered down via
 // ?id= — same shape as MemberGroupPicker's unfiltered fetch of the same two
@@ -103,6 +127,8 @@ function readOnlyRsvpLabel(event: ScreenEvent): string {
 export default function EventDetailScreen() {
   const params = useLocalSearchParams<{ id: string; event?: string }>();
   const { session } = useSession();
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   // Every event here is one the viewer is personally an attendee of, so
   // RSVP is always shown; roster is additionally shown to anyone who isn't
   // a plain Member (Leader scoped to their own assigned members, Admin
@@ -255,11 +281,11 @@ export default function EventDetailScreen() {
 
   if (parseError || !event) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, themed.center]}>
         <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-          <Text style={styles.backLinkText}>‹ Back</Text>
+          <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
         </Pressable>
-        <Text style={styles.error}>
+        <Text style={[styles.error, themed.error]}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
       </View>
@@ -300,22 +326,22 @@ export default function EventDetailScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, themed.container]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
     >
       <View style={styles.topRow}>
         <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-          <Text style={styles.backLinkText}>‹ Back</Text>
+          <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
         </Pressable>
         {canEdit ? (
-          <Pressable style={styles.editButton} onPress={handleEditPress} testID="event-detail-edit">
-            <Text style={styles.editButtonText}>Edit</Text>
+          <Pressable style={[styles.editButton, themed.editButton]} onPress={handleEditPress} testID="event-detail-edit">
+            <Text style={[styles.editButtonText, themed.editButtonText]}>Edit</Text>
           </Pressable>
         ) : null}
       </View>
 
-      <Text style={styles.name}>{event.name}</Text>
-      <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
+      <Text style={[styles.name, themed.name]}>{event.name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       {/* alignSelf: 'flex-start' keeps the tap area sized to the two text
           lines — the ScrollView's contentContainerStyle (this Pressable's
           parent) defaults to alignItems: 'stretch', which would otherwise
@@ -325,8 +351,8 @@ export default function EventDetailScreen() {
         onPress={() => Linking.openURL(getMapUrl(event))}
         testID="event-detail-map"
       >
-        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
-        <Text style={[styles.metaSecondary, styles.locationLink]}>{event.location_address}</Text>
+        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
+        <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
       </Pressable>
 
       {onlineMeetingLink ? (
@@ -335,20 +361,20 @@ export default function EventDetailScreen() {
           onPress={() => Linking.openURL(onlineMeetingLink)}
           testID="event-detail-online-meeting"
         >
-          <Text style={[styles.meta, styles.locationLink]}>{onlineMeetingLabel}</Text>
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{onlineMeetingLabel}</Text>
         </Pressable>
       ) : event.online_meeting_resource_id ? (
-        <Text style={styles.metaSecondary}>
+        <Text style={[styles.metaSecondary, themed.metaSecondary]}>
           {contextLookupsSettled ? "Online meeting link not available" : "Loading…"}
         </Text>
       ) : null}
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, themed.divider]} />
 
       {event.prayer_leader_member_id ? (
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Prayer Leader</Text>
-          <Text style={styles.fieldValue}>
+          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Prayer Leader</Text>
+          <Text style={[styles.fieldValue, themed.fieldValue]}>
             {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
           </Text>
         </View>
@@ -356,8 +382,8 @@ export default function EventDetailScreen() {
 
       {event.food_assignment ? (
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Food Assignment</Text>
-          <Text style={styles.fieldValue}>
+          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Food Assignment</Text>
+          <Text style={[styles.fieldValue, themed.fieldValue]}>
             {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
           </Text>
         </View>
@@ -369,32 +395,32 @@ export default function EventDetailScreen() {
           section outright; undefined still renders it in a loading state. */}
       {event.talk_id !== null ? (
         <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Formation Talk</Text>
+          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Formation Talk</Text>
           {formationTalk ? (
             <>
-              <Text style={styles.fieldValue}>
+              <Text style={[styles.fieldValue, themed.fieldValue]}>
                 {`${formationTalk.course_name} › ${formationTalk.module_name} › ${formationTalk.talk_name}`}
               </Text>
               {formationTalk.talk_description ? (
-                <Text style={styles.metaSecondary}>{formationTalk.talk_description}</Text>
+                <Text style={[styles.metaSecondary, themed.metaSecondary]}>{formationTalk.talk_description}</Text>
               ) : null}
             </>
           ) : (
-            <Text style={styles.metaSecondary}>
+            <Text style={[styles.metaSecondary, themed.metaSecondary]}>
               {contextLookupsSettled ? "Not available" : "Loading…"}
             </Text>
           )}
         </View>
       ) : null}
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, themed.divider]} />
 
-      <RsvpSection event={event} onEventChange={setEvent} />
+      <RsvpSection event={event} onEventChange={setEvent} themed={themed} />
 
       {showRoster ? (
         <>
-          <View style={styles.divider} />
-          <RosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} />
+          <View style={[styles.divider, themed.divider]} />
+          <RosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} themed={themed} />
         </>
       ) : null}
     </ScrollView>
@@ -404,9 +430,11 @@ export default function EventDetailScreen() {
 function RsvpSection({
   event,
   onEventChange,
+  themed,
 }: {
   event: ScreenEvent;
   onEventChange: (event: ScreenEvent) => void;
+  themed: ReturnType<typeof getThemedStyles>;
 }) {
   const editable = event.effective_status === "SCHEDULED";
 
@@ -425,7 +453,7 @@ function RsvpSection({
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Your RSVP</Text>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Your RSVP</Text>
       <RsvpControls
         currentStatus={event.rsvp_status}
         editable={editable}
@@ -436,7 +464,15 @@ function RsvpSection({
   );
 }
 
-function RosterSection({ eventId, refreshTrigger }: { eventId: string; refreshTrigger: number }) {
+function RosterSection({
+  eventId,
+  refreshTrigger,
+  themed,
+}: {
+  eventId: string;
+  refreshTrigger: number;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -456,9 +492,9 @@ function RosterSection({ eventId, refreshTrigger }: { eventId: string; refreshTr
 
   return (
     <View>
-      <Text style={styles.sectionTitle}>Invitees</Text>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Invitees</Text>
       {error ? (
-        <Text style={styles.error}>{error}</Text>
+        <Text style={[styles.error, themed.error]}>{error}</Text>
       ) : !roster ? (
         <ActivityIndicator />
       ) : (

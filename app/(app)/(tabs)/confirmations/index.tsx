@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import {
   listPendingConfirmations,
@@ -6,6 +6,24 @@ import {
 } from "@/src/features/confirmations/services/confirmations.service";
 import { syncConfirmationBadge } from "@/src/features/notifications/services/confirmationBadge.service";
 import type { ConfirmationDecision, PendingConfirmationRow } from "@/src/features/confirmations/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    empty: { color: colors.textSecondary },
+    card: { backgroundColor: colors.cardBackground },
+    eventName: { color: colors.text },
+    name: { color: colors.text },
+    meta: { color: colors.textSecondary },
+    status: { color: colors.text },
+    error: { color: colors.danger },
+  });
+}
 
 function formatSubmittedAt(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
@@ -28,6 +46,8 @@ function formatEventRange(startIso: string, endIso: string): string {
 }
 
 export default function ConfirmationsScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [items, setItems] = useState<PendingConfirmationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -73,14 +93,14 @@ export default function ConfirmationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
+          <Text style={[styles.error, themed.error]}>{error}</Text>
         </View>
       ) : (
         <FlatList
@@ -90,11 +110,11 @@ export default function ConfirmationsScreen() {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => load(true)} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.empty}>No pending confirmations</Text>
+              <Text style={[styles.empty, themed.empty]}>No pending confirmations</Text>
             </View>
           }
           renderItem={({ item }) => (
-            <ConfirmationItem item={item} onDecision={(decision) => handleDecision(item, decision)} />
+            <ConfirmationItem item={item} onDecision={(decision) => handleDecision(item, decision)} themed={themed} />
           )}
         />
       )}
@@ -105,9 +125,11 @@ export default function ConfirmationsScreen() {
 function ConfirmationItem({
   item,
   onDecision,
+  themed,
 }: {
   item: PendingConfirmationRow;
   onDecision: (decision: ConfirmationDecision) => Promise<void>;
+  themed: ReturnType<typeof getThemedStyles>;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,22 +147,22 @@ function ConfirmationItem({
   };
 
   return (
-    <View style={styles.card} testID={`confirmation-item-${item.self_report_id}`}>
-      <Text style={styles.eventName}>{item.event_name}</Text>
-      <Text style={styles.meta}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
-      <Text style={styles.meta}>{item.event_location_name}</Text>
-      <Text style={styles.name}>
+    <View style={[styles.card, themed.card]} testID={`confirmation-item-${item.self_report_id}`}>
+      <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
+      <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
+      <Text style={[styles.name, themed.name]}>
         {item.member_first_name} {item.member_last_name}
       </Text>
-      <Text style={styles.meta}>Submitted {formatSubmittedAt(item.submitted_at)}</Text>
-      <Text style={styles.status}>{attended ? "Self-reported: Attended" : "Self-reported: Did not attend"}</Text>
+      <Text style={[styles.meta, themed.meta]}>Submitted {formatSubmittedAt(item.submitted_at)}</Text>
+      <Text style={[styles.status, themed.status]}>{attended ? "Self-reported: Attended" : "Self-reported: Did not attend"}</Text>
       {/* Note: the self-report's own decline reason isn't part of this
           endpoint's response (only rsvp_reason, a separate field) — nothing
           to show here for a No report beyond the status itself. */}
-      {attended && item.star_rating ? <Text style={styles.meta}>Rating: {item.star_rating}/5</Text> : null}
-      {attended && item.feedback ? <Text style={styles.meta}>{item.feedback}</Text> : null}
+      {attended && item.star_rating ? <Text style={[styles.meta, themed.meta]}>Rating: {item.star_rating}/5</Text> : null}
+      {attended && item.feedback ? <Text style={[styles.meta, themed.meta]}>{item.feedback}</Text> : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
 
       <View style={styles.row}>
         <Pressable

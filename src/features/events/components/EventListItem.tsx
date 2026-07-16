@@ -1,6 +1,9 @@
+import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { getMapUrl } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 interface EventListItemProps {
   event: MyEvent;
@@ -31,19 +34,43 @@ const RSVP_LABELS: Record<RsvpStatus, string> = {
   NO: "You declined",
 };
 
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time. The status-pill/cancelled-tint colors are
+// bespoke to this component (not part of the shared token set in
+// src/theme/colors.ts) — derived from colors.accent/colors.danger at low
+// opacity so they still react to theme instead of hardcoding a second
+// light/dark pair here.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.cardBackground },
+    cancelled: { backgroundColor: colors.danger + "22" },
+    name: { color: colors.text },
+    meta: { color: colors.textSecondary },
+    locationLink: { color: colors.accent },
+    pill: { backgroundColor: colors.accent + "22" },
+    pillCancelled: { backgroundColor: colors.danger + "22" },
+    pillText: { color: colors.accent },
+    pillTextCancelled: { color: colors.danger },
+    rsvpText: { color: colors.textSecondary },
+  });
+}
+
 export function EventListItem({ event, onPress }: EventListItemProps) {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
+
   // FP-66 AC: cancelled events stay in the list, still tappable, still
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
 
   return (
     <Pressable
-      style={[styles.container, isCancelled && styles.cancelled]}
+      style={[styles.container, themed.container, isCancelled && [styles.cancelled, themed.cancelled]]}
       onPress={onPress}
       testID={`event-item-${event.id}`}
     >
-      <Text style={styles.name}>{event.name}</Text>
-      <Text style={styles.meta}>{formatDateTime(event.start_datetime)}</Text>
+      <Text style={[styles.name, themed.name]}>{event.name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatDateTime(event.start_datetime)}</Text>
       {/* Nested Pressable, not a plain Text tap handler: RN's responder
           system gives this its own touch target, so tapping it opens the
           map without also firing the outer card's onPress. alignSelf:
@@ -55,16 +82,16 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
         onPress={() => Linking.openURL(getMapUrl(event))}
         testID={`event-item-map-${event.id}`}
       >
-        <Text style={[styles.meta, styles.locationLink]}>{event.location_name}</Text>
+        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
       </Pressable>
       <View style={styles.footer}>
-        <View style={[styles.pill, isCancelled && styles.pillCancelled]}>
-          <Text style={[styles.pillText, isCancelled && styles.pillTextCancelled]}>
+        <View style={[styles.pill, themed.pill, isCancelled && [styles.pillCancelled, themed.pillCancelled]]}>
+          <Text style={[styles.pillText, themed.pillText, isCancelled && [styles.pillTextCancelled, themed.pillTextCancelled]]}>
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
         {event.rsvp_status ? (
-          <Text style={styles.rsvpText}>{RSVP_LABELS[event.rsvp_status]}</Text>
+          <Text style={[styles.rsvpText, themed.rsvpText]}>{RSVP_LABELS[event.rsvp_status]}</Text>
         ) : null}
       </View>
     </Pressable>

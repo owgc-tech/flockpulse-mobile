@@ -1,10 +1,26 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
 import type { PendingSelfReportRow } from "@/src/features/self-reports/types";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
 import type { MyEvent } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    empty: { color: colors.textSecondary },
+    card: { backgroundColor: colors.cardBackground },
+    eventName: { color: colors.text },
+    meta: { color: colors.textSecondary },
+    error: { color: colors.danger },
+  });
+}
 
 function formatEventRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -49,6 +65,8 @@ function toRouteEvent(item: PendingSelfReportRow): MyEvent {
 }
 
 export default function SelfReportTabScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [items, setItems] = useState<PendingSelfReportRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -88,14 +106,14 @@ export default function SelfReportTabScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
           <ActivityIndicator />
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
+          <Text style={[styles.error, themed.error]}>{error}</Text>
         </View>
       ) : (
         <FlatList
@@ -105,18 +123,18 @@ export default function SelfReportTabScreen() {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => load(true)} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.empty}>No pending self-reports</Text>
+              <Text style={[styles.empty, themed.empty]}>No pending self-reports</Text>
             </View>
           }
           renderItem={({ item }) => (
             <Pressable
-              style={styles.card}
+              style={[styles.card, themed.card]}
               onPress={() => handlePress(item)}
               testID={`self-report-item-${item.event_id}`}
             >
-              <Text style={styles.eventName}>{item.event_name}</Text>
-              <Text style={styles.meta}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
-              <Text style={styles.meta}>{item.event_location_name}</Text>
+              <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
+              <Text style={[styles.meta, themed.meta]}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
+              <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
             </Pressable>
           )}
         />

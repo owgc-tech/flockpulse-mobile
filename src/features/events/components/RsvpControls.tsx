@@ -1,6 +1,24 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { RsvpStatus } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    currentLabel: { color: colors.textSecondary },
+    readOnly: { backgroundColor: colors.cardBackground },
+    readOnlyText: { color: colors.text },
+    buttonSecondary: { backgroundColor: colors.backgroundSecondary },
+    buttonSecondaryText: { color: colors.text },
+    label: { color: colors.text },
+    input: { color: colors.text, borderColor: colors.border },
+    error: { color: colors.danger },
+  });
+}
 
 interface RsvpControlsProps {
   currentStatus: RsvpStatus | null;
@@ -10,6 +28,8 @@ interface RsvpControlsProps {
 }
 
 export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit }: RsvpControlsProps) {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [reason, setReason] = useState("");
   const [showReasonForm, setShowReasonForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,8 +37,8 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
 
   if (!editable) {
     return (
-      <View style={styles.readOnly} testID="rsvp-readonly">
-        <Text style={styles.readOnlyText}>{readOnlyLabel}</Text>
+      <View style={[styles.readOnly, themed.readOnly]} testID="rsvp-readonly">
+        <Text style={[styles.readOnlyText, themed.readOnlyText]}>{readOnlyLabel}</Text>
       </View>
     );
   }
@@ -55,22 +75,22 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   return (
     <View style={styles.container}>
       {currentStatus ? (
-        <Text style={styles.currentLabel}>
+        <Text style={[styles.currentLabel, themed.currentLabel]}>
           Current response: {currentStatus === "YES" ? "Going" : "Not going"}
         </Text>
       ) : null}
 
       {error ? (
-        <Text style={styles.error} testID="rsvp-error">
+        <Text style={[styles.error, themed.error]} testID="rsvp-error">
           {error}
         </Text>
       ) : null}
 
       {showReasonForm ? (
         <View>
-          <Text style={styles.label}>Reason for declining</Text>
+          <Text style={[styles.label, themed.label]}>Reason for declining</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, themed.input]}
             value={reason}
             onChangeText={setReason}
             multiline
@@ -79,7 +99,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
           />
           <View style={styles.row}>
             <Pressable
-              style={[styles.button, styles.buttonSecondary]}
+              style={[styles.button, styles.buttonSecondary, themed.buttonSecondary]}
               onPress={() => {
                 setShowReasonForm(false);
                 setError(null);
@@ -87,7 +107,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
               disabled={isSubmitting}
               testID="rsvp-cancel-no"
             >
-              <Text style={styles.buttonSecondaryText}>Cancel</Text>
+              <Text style={[styles.buttonSecondaryText, themed.buttonSecondaryText]}>Cancel</Text>
             </Pressable>
             <Pressable
               style={[styles.button, styles.buttonDanger]}
