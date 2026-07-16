@@ -3,6 +3,7 @@ import type {
   CreatedEvent,
   CreateEventInput,
   EventDetail,
+  MeetingResource,
   MyEvent,
   PublishedEvent,
   RosterEntry,
@@ -14,6 +15,12 @@ import type {
 
 export async function listMyEvents(): Promise<MyEvent[]> {
   return apiFetch<MyEvent[]>("/api/events/mine");
+}
+
+// GET /api/meeting-resources — the tracked Zoom accounts a Leader/Admin can
+// book an event against, for the Online Meeting picker on create/edit.
+export async function listMeetingResources(): Promise<MeetingResource[]> {
+  return apiFetch<MeetingResource[]>("/api/meeting-resources");
 }
 
 // Fresh-fetch for the event detail / self-report screens: the event object

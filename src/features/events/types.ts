@@ -26,6 +26,9 @@ export interface MyEvent {
   location_name: string;
   location_address: string;
   location_url: string | null;
+  online_meeting_resource_id: string | null;
+  online_meeting_url: string | null;
+  online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   event_type_id: string;
   prayer_leader_member_id: string | null;
@@ -91,6 +94,9 @@ export interface CreateEventInput {
   locationName: string;
   locationAddress: string;
   locationUrl?: string;
+  onlineMeetingResourceId?: string;
+  onlineMeetingUrl?: string;
+  onlineMeetingPlatformLabel?: string;
   target: EventTargetSelector;
   talkId?: string;
   prayerLeaderMemberId?: string;
@@ -108,6 +114,9 @@ export interface CreatedEvent {
   location_name: string;
   location_address: string;
   location_url: string | null;
+  online_meeting_resource_id: string | null;
+  online_meeting_url: string | null;
+  online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   talk_id: string | null;
   prayer_leader_member_id: string | null;
@@ -145,6 +154,9 @@ export interface UpdateEventInput {
   locationName: string;
   locationAddress: string;
   locationUrl: string | null;
+  onlineMeetingResourceId: string | null;
+  onlineMeetingUrl: string | null;
+  onlineMeetingPlatformLabel: string | null;
   target: EventTargetSelector;
   talkId: string | null;
   prayerLeaderMemberId: string | null;
@@ -163,9 +175,20 @@ export interface UpdatedEvent {
   location_name: string;
   location_address: string;
   location_url: string | null;
+  online_meeting_resource_id: string | null;
+  online_meeting_url: string | null;
+  online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   talk_id: string | null;
   prayer_leader_member_id: string | null;
   food_assignment: EventTargetSelector | null;
   updated_at: string;
+}
+
+// Matches web's listMeetingResources() (GET /api/meeting-resources) — the
+// tracked Zoom accounts available to book against.
+export interface MeetingResource {
+  id: string;
+  name: string;
+  join_url: string;
 }
