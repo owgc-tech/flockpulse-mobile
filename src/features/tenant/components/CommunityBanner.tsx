@@ -1,8 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/src/features/profile/components/Avatar";
 import { fetchTenantSettings } from "@/src/features/tenant/services/tenant.service";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background, borderBottomColor: colors.border },
+    name: { color: colors.text },
+    poweredBy: { color: colors.textMuted },
+  });
+}
 
 // FP-118: fetched once on mount, no caching — this data (community name/
 // logo) changes rarely, unlike the role-sync issue from FP-96-FP-97-adj-1,
@@ -19,6 +32,8 @@ import { fetchTenantSettings } from "@/src/features/tenant/services/tenant.servi
 // bug report that prompted this restructure.
 export function CommunityBanner() {
   const insets = useSafeAreaInsets();
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [name, setName] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -34,16 +49,16 @@ export function CommunityBanner() {
   }, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 8 }]} testID="community-banner">
+    <View style={[styles.container, themed.container, { paddingTop: insets.top + 8 }]} testID="community-banner">
       <View style={styles.left}>
         {logoUrl ? (
           <Image source={{ uri: logoUrl }} style={styles.logo} testID="community-banner-logo" />
         ) : null}
         <View style={styles.textColumn}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, themed.name]} numberOfLines={1}>
             {name ?? "Community"}
           </Text>
-          <Text style={styles.poweredBy}>Powered by FlockPulse</Text>
+          <Text style={[styles.poweredBy, themed.poweredBy]}>Powered by FlockPulse</Text>
         </View>
       </View>
       <Avatar />

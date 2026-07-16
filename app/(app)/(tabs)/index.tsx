@@ -18,6 +18,8 @@ import { reconcileEventReminders } from "@/src/features/notifications/services/r
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import type { MyEvent } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 interface EventSection {
   key: string; // "2026-07" — sort/lookup key, not displayed
@@ -50,10 +52,14 @@ function EventRow({
   event,
   onPress,
   onLayout,
+  themedDayOfWeek,
+  themedDateNumber,
 }: {
   event: MyEvent;
   onPress: () => void;
   onLayout: (height: number) => void;
+  themedDayOfWeek: { color: string };
+  themedDateNumber: { color: string };
 }) {
   const start = new Date(event.start_datetime);
   const dayOfWeek = start.toLocaleDateString(undefined, { weekday: "short" });
@@ -62,8 +68,8 @@ function EventRow({
   return (
     <View style={styles.row} onLayout={(e) => onLayout(e.nativeEvent.layout.height)}>
       <View style={styles.dateColumn}>
-        <Text style={styles.dayOfWeek}>{dayOfWeek}</Text>
-        <Text style={styles.dateNumber}>{dateNumber}</Text>
+        <Text style={[styles.dayOfWeek, themedDayOfWeek]}>{dayOfWeek}</Text>
+        <Text style={[styles.dateNumber, themedDateNumber]}>{dateNumber}</Text>
       </View>
       <View style={styles.eventColumn}>
         <EventListItem event={event} onPress={onPress} />
@@ -90,8 +96,31 @@ const ESTIMATED_ROW_HEIGHT = 140;
 // section has rendered and measured itself once, not a universal height.
 const ESTIMATED_SECTION_HEADER_HEIGHT = 41;
 
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    monthLabel: { color: colors.text },
+    monthChevron: { color: colors.textSecondary },
+    monthCard: { backgroundColor: colors.cardBackground },
+    monthOptionText: { color: colors.text },
+    monthOptionTextActive: { color: colors.accent },
+    sectionHeader: { backgroundColor: colors.background, borderBottomColor: colors.border },
+    sectionHeaderText: { color: colors.text },
+    dayOfWeek: { color: colors.textSecondary },
+    dateNumber: { color: colors.text },
+    error: { color: colors.danger },
+    empty: { color: colors.textSecondary },
+    fab: { backgroundColor: colors.accent },
+  });
+}
+
 export default function MyEventsScreen() {
   const { session } = useSession();
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   // Same inclusive pattern used everywhere else in this app — correct for
   // any current or future role at Leader-tier or Admin-tier, not a
   // hardcoded list of exact role values.
@@ -270,7 +299,7 @@ export default function MyEventsScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, themed.container]}>
       <Modal
         visible={isMonthPickerOpen}
         transparent
@@ -282,7 +311,7 @@ export default function MyEventsScreen() {
           onPress={() => setIsMonthPickerOpen(false)}
           testID="month-dropdown-backdrop"
         />
-        <View style={styles.monthCard} testID="month-dropdown-card">
+        <View style={[styles.monthCard, themed.monthCard]} testID="month-dropdown-card">
           {sections.map((section) => (
             <Pressable
               key={section.key}
@@ -291,7 +320,11 @@ export default function MyEventsScreen() {
               testID={`month-option-${section.key}`}
             >
               <Text
-                style={[styles.monthOptionText, section.title === currentMonthLabel && styles.monthOptionTextActive]}
+                style={[
+                  styles.monthOptionText,
+                  themed.monthOptionText,
+                  section.title === currentMonthLabel && [styles.monthOptionTextActive, themed.monthOptionTextActive],
+                ]}
               >
                 {section.title}
               </Text>
@@ -311,10 +344,10 @@ export default function MyEventsScreen() {
           disabled={sections.length === 0}
           testID="month-dropdown"
         >
-          <Text style={styles.monthLabel}>
+          <Text style={[styles.monthLabel, themed.monthLabel]}>
             {currentMonthLabel ?? new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
           </Text>
-          {sections.length > 0 ? <Text style={styles.monthChevron}>▾</Text> : null}
+          {sections.length > 0 ? <Text style={[styles.monthChevron, themed.monthChevron]}>▾</Text> : null}
         </Pressable>
       </View>
 
@@ -324,7 +357,7 @@ export default function MyEventsScreen() {
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error}>{error}</Text>
+          <Text style={[styles.error, themed.error]}>{error}</Text>
         </View>
       ) : (
         <SectionList
@@ -341,17 +374,17 @@ export default function MyEventsScreen() {
           }
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.empty}>No upcoming events</Text>
+              <Text style={[styles.empty, themed.empty]}>No upcoming events</Text>
             </View>
           }
           renderSectionHeader={({ section }) => {
             const isBlank = section.title === currentMonthLabel;
             return (
               <View
-                style={[styles.sectionHeader, isBlank && styles.sectionHeaderBlank]}
+                style={[styles.sectionHeader, themed.sectionHeader, isBlank && styles.sectionHeaderBlank]}
                 onLayout={(e) => handleSectionHeaderLayout(section.key, e.nativeEvent.layout.height)}
               >
-                <Text style={styles.sectionHeaderText}>{isBlank ? "" : section.title}</Text>
+                <Text style={[styles.sectionHeaderText, themed.sectionHeaderText]}>{isBlank ? "" : section.title}</Text>
               </View>
             );
           }}
@@ -360,6 +393,8 @@ export default function MyEventsScreen() {
               event={item}
               onPress={() => handlePressEvent(item)}
               onLayout={(height) => handleRowLayout(item.id, height)}
+              themedDayOfWeek={themed.dayOfWeek}
+              themedDateNumber={themed.dateNumber}
             />
           )}
         />
@@ -367,7 +402,7 @@ export default function MyEventsScreen() {
 
       {canCreateEvent ? (
         <Pressable
-          style={styles.fab}
+          style={[styles.fab, themed.fab]}
           onPress={() => router.push("/(app)/events/create")}
           testID="create-event-fab"
         >
