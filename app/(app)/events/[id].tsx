@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { getEventById, getEventRoster, submitRsvp } from "@/src/features/events/services/events.service";
+import {
+  getEventById,
+  getEventRoster,
+  listMeetingResources,
+  submitRsvp,
+} from "@/src/features/events/services/events.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl } from "@/src/features/events/utils";
-import type { EventDetail, EventTargetSelector, MyEvent, RosterEntry, RsvpStatus } from "@/src/features/events/types";
+import type {
+  EventDetail,
+  EventTargetSelector,
+  MeetingResource,
+  MyEvent,
+  RosterEntry,
+  RsvpStatus,
+} from "@/src/features/events/types";
 import type { EventReminderFormation } from "@/src/features/notifications/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -133,6 +145,7 @@ export default function EventDetailScreen() {
   const [prayerLeaderName, setPrayerLeaderName] = useState<string | null>(null);
   const [foodAssignmentNames, setFoodAssignmentNames] = useState<string | null>(null);
   const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
+  const [meetingResource, setMeetingResource] = useState<MeetingResource | null>(null);
   // Distinguishes "still fetching" from "fetched, nothing to show" (e.g. the
   // prayer leader lookup rejected outright) — without this, a rejected
   // lookup would leave its section reading "Loading…" forever instead of
@@ -171,22 +184,27 @@ export default function EventDetailScreen() {
 
   // The initial event object came baked into a notification's data payload
   // at scheduling time (or route params from the list screen) — it can be
-  // stale if the event was edited/cancelled since. Fresh-fetch on open and
-  // merge over what's already rendered so the baked-in data only ever
-  // avoids a blank flash, never what the user actually ends up seeing.
-  // getEventById() doesn't return rsvp_status/rsvp_reason (only
-  // /api/events/mine does), so spreading it over the previous state can't
-  // clobber those fields even though it runs after the initial parse.
-  useEffect(() => {
-    if (!params.id) return;
-    getEventById(params.id)
-      .then((fresh) => {
-        setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
-      })
-      .catch((err) => {
-        console.warn("Failed to fresh-fetch event:", err);
-      });
-  }, [params.id]);
+  // stale if the event was edited/cancelled since. Fresh-fetch on every
+  // focus (not just mount) and merge over what's already rendered, so
+  // returning to this screen after editing elsewhere (e.g. the Edit form,
+  // which navigates back via router.back() rather than a fresh push) also
+  // picks up the change — FP-120-mobile-adj-1: a mount-only fetch missed
+  // that return-from-edit case. getEventById() doesn't return
+  // rsvp_status/rsvp_reason (only /api/events/mine does), so spreading it
+  // over the previous state can't clobber those fields even though it runs
+  // after the initial parse.
+  useFocusEffect(
+    useCallback(() => {
+      if (!params.id) return;
+      getEventById(params.id)
+        .then((fresh) => {
+          setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+        })
+        .catch((err) => {
+          console.warn("Failed to fresh-fetch event:", err);
+        });
+    }, [params.id])
+  );
 
   // Prayer Leader / Food Assignment / Formation Talk are three independent
   // lookups — Promise.allSettled (not sequential awaits) so one failing
@@ -205,7 +223,15 @@ export default function EventDetailScreen() {
         : Promise.resolve(null),
       event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
       event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
-    ]).then(([prayerResult, foodResult, talkResult]) => {
+      // Only the id is on the event itself — the display name and actual
+      // join_url live on the tracked resource, same reasoning as the
+      // Prayer Leader/Food Assignment id-to-name lookups above.
+      event.online_meeting_resource_id
+        ? listMeetingResources().then(
+            (resources) => resources.find((r) => r.id === event.online_meeting_resource_id) ?? null
+          )
+        : Promise.resolve(null),
+    ]).then(([prayerResult, foodResult, talkResult, meetingResourceResult]) => {
       if (prayerResult.status === "fulfilled" && prayerResult.value) {
         const member = prayerResult.value;
         setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
@@ -216,9 +242,18 @@ export default function EventDetailScreen() {
       if (talkResult.status === "fulfilled" && talkResult.value?.formation) {
         setFormationTalk(talkResult.value.formation);
       }
+      if (meetingResourceResult.status === "fulfilled" && meetingResourceResult.value) {
+        setMeetingResource(meetingResourceResult.value);
+      }
       setContextLookupsSettled(true);
     });
-  }, [event?.id, event?.prayer_leader_member_id, event?.food_assignment, event?.talk_id]);
+  }, [
+    event?.id,
+    event?.prayer_leader_member_id,
+    event?.food_assignment,
+    event?.talk_id,
+    event?.online_meeting_resource_id,
+  ]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [rosterRefreshTrigger, setRosterRefreshTrigger] = useState(0);
@@ -279,6 +314,16 @@ export default function EventDetailScreen() {
     });
   };
 
+  // Resource-booked meetings resolve their join link/label from the tracked
+  // resource (looked up above); freeform-platform meetings already carry
+  // both directly on the event.
+  const onlineMeetingLink = event.online_meeting_resource_id
+    ? (meetingResource?.join_url ?? null)
+    : event.online_meeting_url;
+  const onlineMeetingLabel = event.online_meeting_resource_id
+    ? `Zoom: ${meetingResource?.name ?? "Join Meeting"}`
+    : event.online_meeting_platform_label || "Join Meeting";
+
   return (
     <ScrollView
       contentContainerStyle={[styles.container, themed.container]}
@@ -309,6 +354,20 @@ export default function EventDetailScreen() {
         <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
         <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
       </Pressable>
+
+      {onlineMeetingLink ? (
+        <Pressable
+          style={styles.locationPressable}
+          onPress={() => Linking.openURL(onlineMeetingLink)}
+          testID="event-detail-online-meeting"
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{onlineMeetingLabel}</Text>
+        </Pressable>
+      ) : event.online_meeting_resource_id ? (
+        <Text style={[styles.metaSecondary, themed.metaSecondary]}>
+          {contextLookupsSettled ? "Online meeting link not available" : "Loading…"}
+        </Text>
+      ) : null}
 
       <View style={[styles.divider, themed.divider]} />
 

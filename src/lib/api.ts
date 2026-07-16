@@ -13,20 +13,33 @@ if (!apiBaseUrl) {
   );
 }
 
+// MEETING_RESOURCE_CONFLICT's structured conflict payload (DIP-FP-120-mobile)
+// — null only for the rare race-condition fallback path, where the server's
+// own `message` is displayed as-is instead.
+export interface MeetingResourceConflict {
+  eventId: string;
+  eventName: string;
+  startDatetime: string;
+  endDatetime: string;
+  bookedByName: string;
+}
+
 export class ApiError extends Error {
   code: string;
   status: number;
+  conflict: MeetingResourceConflict | null;
 
-  constructor(code: string, message: string, status: number) {
+  constructor(code: string, message: string, status: number, conflict: MeetingResourceConflict | null = null) {
     super(message);
     this.code = code;
     this.status = status;
+    this.conflict = conflict;
   }
 }
 
 interface ApiEnvelope<T> {
   data?: T;
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; conflict?: MeetingResourceConflict | null };
 }
 
 // Mirrors flockpulse-web's own API shape exactly: Authorization: Bearer
@@ -53,8 +66,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const body = (await response.json()) as ApiEnvelope<T>;
 
   if (!response.ok || body.error) {
-    const { code = "UNKNOWN_ERROR", message = "Something went wrong." } = body.error ?? {};
-    throw new ApiError(code, message, response.status);
+    const { code = "UNKNOWN_ERROR", message = "Something went wrong.", conflict = null } = body.error ?? {};
+    throw new ApiError(code, message, response.status, conflict);
   }
 
   return body.data as T;
