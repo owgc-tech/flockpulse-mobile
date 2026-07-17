@@ -89,6 +89,6 @@ const styles = StyleSheet.create({
     // doesn't balloon into an oversized square on tablets (aspectRatio: 1 means
     // height grows 1:1 with width, unlike web's wide 2:1 lockup).
     width: 140,
-    aspectRatio: 1,
+    height: 140,
   },
 });
