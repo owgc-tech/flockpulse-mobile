@@ -6,8 +6,10 @@ import { syncConfirmationBadge } from "@/src/features/notifications/services/con
 import { useConfirmationBadgeCount } from "@/src/features/notifications/hooks/useConfirmationBadgeCount";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
 import { useSelfReportBadgeCount } from "@/src/features/notifications/hooks/useSelfReportBadgeCount";
+import { useThemeColors } from "@/src/theme/useThemeColors";
 
 export default function TabsLayout() {
+  const colors = useThemeColors();
   const { session } = useSession();
   const role = session?.user.app_metadata?.role;
   const showConfirmations = role !== undefined && role !== "MEMBER";
@@ -66,7 +68,14 @@ export default function TabsLayout() {
   // tabBarBadge/href below are untouched — those control the bottom tab
   // bar, which headerShown doesn't affect.
   return (
-    <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
+      }}
+    >
       <Tabs.Screen name="index" options={{ tabBarLabel: "My Events" }} />
       <Tabs.Screen
         name="confirmations/index"

@@ -1,11 +1,32 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 import type { TotpEnrollment } from "@/src/features/auth/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 interface MfaEnrollFormProps {
   enrollment: TotpEnrollment;
   onVerify: (code: string) => Promise<void>;
+}
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+// Deliberate exception: `qrWrapper`'s white background is NOT themed — the
+// QR SVG itself is rendered black-on-white by Supabase and needs that
+// contrast to stay scannable; darkening the card around it would risk an
+// unscannable code in dark mode, which is worse than a visual mismatch.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    instructions: { color: colors.text },
+    fallbackLabel: { color: colors.textSecondary },
+    secret: { color: colors.text },
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    error: { color: colors.danger },
+    button: { backgroundColor: colors.accent },
+  });
 }
 
 const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -46,6 +67,8 @@ function extractSvgMarkup(dataUri: string): string {
 }
 
 export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -66,38 +89,40 @@ export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.instructions}>
+      <Text style={[styles.instructions, themed.instructions]}>
         Scan this QR code with your authenticator app (e.g. Google Authenticator, Authy).
       </Text>
 
+      {/* Deliberately not themed — see getThemedStyles' comment. */}
       <View style={styles.qrWrapper} testID="mfa-enroll-qr">
         <SvgXml xml={svgMarkup} width={220} height={220} />
       </View>
 
-      <Text style={styles.fallbackLabel}>Can&apos;t scan? Enter this code manually:</Text>
-      <Text selectable style={styles.secret} testID="mfa-enroll-secret">
+      <Text style={[styles.fallbackLabel, themed.fallbackLabel]}>Can&apos;t scan? Enter this code manually:</Text>
+      <Text selectable style={[styles.secret, themed.secret]} testID="mfa-enroll-secret">
         {enrollment.secret}
       </Text>
 
-      <Text style={styles.label}>Verification code</Text>
+      <Text style={[styles.label, themed.label]}>Verification code</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={code}
         onChangeText={setCode}
         keyboardType="number-pad"
         maxLength={6}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="mfa-enroll-code-input"
       />
 
       {error ? (
-        <Text style={styles.error} testID="mfa-enroll-error">
+        <Text style={[styles.error, themed.error]} testID="mfa-enroll-error">
           {error}
         </Text>
       ) : null}
 
       <Pressable
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
+        style={[styles.button, themed.button, isSubmitting && styles.buttonDisabled]}
         onPress={handleSubmit}
         disabled={isSubmitting || code.length < 6}
         testID="mfa-enroll-submit"

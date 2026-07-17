@@ -95,6 +95,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
             onChangeText={setReason}
             multiline
             editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
             testID="rsvp-reason-input"
           />
           <View style={styles.row}>

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { MfaVerifyForm } from "@/src/features/auth/components/MfaVerifyForm";
@@ -8,8 +9,22 @@ import {
   markJustAuthenticated,
 } from "@/src/features/auth/services/biometricTrust.service";
 import { supabase } from "@/src/lib/supabase";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    title: { color: colors.text },
+  });
+}
 
 export default function MfaVerifyScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const handleVerify = async (code: string) => {
     const factorId = await getTotpFactorId();
     if (!factorId) {
@@ -37,8 +52,8 @@ export default function MfaVerifyScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Verify It&apos;s You</Text>
+    <View style={[styles.container, themed.container]}>
+      <Text style={[styles.title, themed.title]}>Verify It&apos;s You</Text>
       <MfaVerifyForm onSubmit={handleVerify} />
     </View>
   );

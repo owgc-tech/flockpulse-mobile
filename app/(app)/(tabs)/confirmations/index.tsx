@@ -131,18 +131,18 @@ function ConfirmationItem({
   onDecision: (decision: ConfirmationDecision) => Promise<void>;
   themed: ReturnType<typeof getThemedStyles>;
 }) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<ConfirmationDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
   const attended = item.self_report_status === "SELF_REPORTED_YES";
 
   const handlePress = async (decision: ConfirmationDecision) => {
     setError(null);
-    setIsSubmitting(true);
+    setSubmitting(decision);
     try {
       await onDecision(decision);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit confirmation.");
-      setIsSubmitting(false);
+      setSubmitting(null);
     }
   };
 
@@ -168,18 +168,18 @@ function ConfirmationItem({
         <Pressable
           style={[styles.button, styles.buttonPrimary]}
           onPress={() => handlePress("CONFIRM")}
-          disabled={isSubmitting}
+          disabled={submitting !== null}
           testID={`confirm-${item.self_report_id}`}
         >
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Attended</Text>}
+          {submitting === "CONFIRM" ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Attended</Text>}
         </Pressable>
         <Pressable
           style={[styles.button, styles.buttonDanger]}
           onPress={() => handlePress("REJECT")}
-          disabled={isSubmitting}
+          disabled={submitting !== null}
           testID={`reject-${item.self_report_id}`}
         >
-          <Text style={styles.buttonText}>Did Not Attend</Text>
+          {submitting === "REJECT" ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Did Not Attend</Text>}
         </Pressable>
       </View>
     </View>
