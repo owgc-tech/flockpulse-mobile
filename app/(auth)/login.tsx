@@ -85,10 +85,11 @@ const styles = StyleSheet.create({
   },
   logo: {
     // FlockPulseLogo2_AP5.png is a square/stacked mark (measured source: 2000x2000,
-    // bundled at 640x640) — fixed width rather than a screen-width percentage so it
-    // doesn't balloon into an oversized square on tablets (aspectRatio: 1 means
-    // height grows 1:1 with width, unlike web's wide 2:1 lockup).
+    // bundled at 640x640) — fixed width/height rather than a screen-width percentage
+    // so it doesn't balloon into an oversized square on tablets. overflow: 'hidden'
+    // is a hard backstop against oversized rendering on-device.
     width: 140,
-    aspectRatio: 1,
+    height: 140,
+    overflow: "hidden",
   },
 });
