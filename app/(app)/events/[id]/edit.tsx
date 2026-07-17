@@ -360,14 +360,17 @@ export default function EditEventScreen() {
   const [locationName, setLocationName] = useState(initialEvent.location_name ?? "");
   const [locationAddress, setLocationAddress] = useState(initialEvent.location_address ?? "");
   const [locationUrl, setLocationUrl] = useState(initialEvent.location_url ?? "");
-  // DIP-FP-132-FP-133-FP-134: always starts blank — EventDetail carries only
-  // the computed rsvp_closure_at, not the raw rsvp_closure_days override, so
-  // there's no value to prefill from (per this DIP's type scope; see PR
-  // description). Leaving this untouched and saving still sends an explicit
-  // null (blank = tenant default, same always-sent convention as every
-  // other UpdateEventInput field below), which reverts any previously-set
-  // per-event override to the tenant default.
-  const [rsvpClosureDays, setRsvpClosureDays] = useState("");
+  // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): prefilled from
+  // the event's actual override, not always blank — leaving this field
+  // as-is and saving previously sent an explicit null (blank = tenant
+  // default, same always-sent convention as every other UpdateEventInput
+  // field below), silently clearing any existing per-event override on
+  // every unrelated edit.
+  const [rsvpClosureDays, setRsvpClosureDays] = useState(
+    initialEvent.rsvp_closure_days !== null && initialEvent.rsvp_closure_days !== undefined
+      ? String(initialEvent.rsvp_closure_days)
+      : ""
+  );
   const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">(
     initialEvent.online_meeting_resource_id ? "zoom" : initialEvent.online_meeting_url ? "other" : "none"
   );

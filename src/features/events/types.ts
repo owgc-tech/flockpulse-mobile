@@ -62,6 +62,12 @@ export interface MyEvent {
 export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   talk_id: string | null;
   created_by_member_id: string | null;
+  // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): the raw
+  // per-event override behind rsvp_closure_at, confirmed live on
+  // GET /api/events/:id's select list — added so edit.tsx can prefill its
+  // override field instead of always defaulting to blank (which was
+  // silently clearing any existing override on every unrelated save).
+  rsvp_closure_days: number | null;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).
