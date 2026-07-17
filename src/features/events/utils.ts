@@ -11,3 +11,12 @@ export function getMapUrl(event: MyEvent): string {
   }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location_address)}`;
 }
+
+// DIP-FP-132-FP-133-FP-134: single source of truth for "is RSVP still
+// open," shared by RsvpControls' prompt (via EventListItem/Event Detail)
+// and the Event Detail screen's editable gate — replaces the old
+// effective_status === "SCHEDULED"-only check with closure-cutoff
+// awareness now that rsvp_closure_at is server-computed (PR #77).
+export function isRsvpWindowOpen(event: Pick<MyEvent, "effective_status" | "rsvp_closure_at">): boolean {
+  return event.effective_status === "SCHEDULED" && Date.now() < new Date(event.rsvp_closure_at).getTime();
+}

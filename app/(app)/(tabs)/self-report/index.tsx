@@ -61,6 +61,11 @@ function toRouteEvent(item: PendingSelfReportRow): MyEvent {
     effective_status: "COMPLETED",
     rsvp_status: null,
     rsvp_reason: null,
+    // Same cosmetic-placeholder reasoning as created_at/location_address
+    // above — self-report.tsx never reads rsvp_closure_at (event is already
+    // COMPLETED, so isRsvpWindowOpen's effective_status check is false
+    // regardless of this value).
+    rsvp_closure_at: "",
   };
 }
 

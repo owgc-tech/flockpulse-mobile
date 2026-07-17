@@ -28,7 +28,11 @@ export interface EventReminderContext {
 // before this field existed — created by FP-96's code, already sitting
 // on-device — still route correctly: the root layout's tap handler treats
 // a missing `type` as `"reminder"` for backward compatibility.
-export type NotificationType = "reminder" | "self-report" | "confirmation";
+// DIP-FP-132-FP-133-FP-134: "rsvp-nudge" added. No change needed in
+// app/_layout.tsx's tap router — an untyped/new type already falls through
+// to the default event-detail navigation, which is the correct destination
+// for a nudge tap.
+export type NotificationType = "reminder" | "self-report" | "confirmation" | "rsvp-nudge";
 
 // Serialized into a scheduled notification's `data` payload — same shape the
 // events list screen already passes as route params to the detail screen,

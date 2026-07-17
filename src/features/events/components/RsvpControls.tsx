@@ -78,7 +78,9 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
         <Text style={[styles.currentLabel, themed.currentLabel]}>
           Current response: {currentStatus === "YES" ? "Going" : "Not going"}
         </Text>
-      ) : null}
+      ) : (
+        <Text style={[styles.currentLabel, themed.currentLabel]}>You have not RSVPed</Text>
+      )}
 
       {error ? (
         <Text style={[styles.error, themed.error]} testID="rsvp-error">

@@ -37,6 +37,10 @@ export interface MyEvent {
   effective_status: EffectiveEventStatus;
   rsvp_status: RsvpStatus | null;
   rsvp_reason: string | null;
+  // DIP-FP-132-FP-133-FP-134: server-computed RSVP cutoff (start_datetime
+  // minus the event's rsvp_closure_days override or the tenant default) —
+  // confirmed live on both /api/events/mine and /api/events/:id (PR #77).
+  rsvp_closure_at: string;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -101,6 +105,10 @@ export interface CreateEventInput {
   talkId?: string;
   prayerLeaderMemberId?: string;
   foodAssignment?: EventTargetSelector;
+  // DIP-FP-132-FP-133-FP-134: per-event RSVP closure override, in days
+  // before start_datetime. Omitted (not sent) falls back to the tenant
+  // default — confirmed live against POST /api/events's route handler.
+  rsvpClosureDays?: number;
 }
 
 // POST /api/events success response — confirmed live. status is always
@@ -161,6 +169,11 @@ export interface UpdateEventInput {
   talkId: string | null;
   prayerLeaderMemberId: string | null;
   foodAssignment: EventTargetSelector | null;
+  // DIP-FP-132-FP-133-FP-134: always sent (never omitted), same convention
+  // as every other field on this type — null explicitly reverts the event
+  // to the tenant default, matching PATCH /api/events/:id's JSONB
+  // key-presence patch handling confirmed live.
+  rsvpClosureDays: number | null;
 }
 
 // PATCH /api/events/:id success response — confirmed live against

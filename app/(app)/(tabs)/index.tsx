@@ -17,6 +17,7 @@ import { ensureNotificationSetup } from "@/src/features/notifications/services/n
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
+import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
 import type { MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -235,6 +236,9 @@ export default function MyEventsScreen() {
       });
       reconcileConfirmationReminders().catch((err) => {
         console.warn("Failed to reconcile confirmation reminders:", err);
+      });
+      reconcileRsvpNudges(data).catch((err) => {
+        console.warn("Failed to reconcile RSVP nudges:", err);
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load events.");
