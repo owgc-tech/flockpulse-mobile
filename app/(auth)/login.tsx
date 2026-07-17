@@ -88,8 +88,8 @@ const styles = StyleSheet.create({
     // bundled at 640x640) — fixed width/height rather than a screen-width percentage
     // so it doesn't balloon into an oversized square on tablets. overflow: 'hidden'
     // is a hard backstop against oversized rendering on-device.
-    width: 140,
-    height: 140,
+    width: 300,
+    height: 300,
     overflow: "hidden",
   },
 });
