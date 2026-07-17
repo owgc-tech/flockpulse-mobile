@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { LoginForm } from "@/src/features/auth/components/LoginForm";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signInWithPassword } from "@/src/features/auth/services/auth.service";
@@ -12,7 +12,7 @@ import type { ThemeColors } from "@/src/theme/colors";
 function getThemedStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { backgroundColor: colors.background },
-    title: { color: colors.text },
+    poweredBy: { color: colors.textSecondary },
   });
 }
 
@@ -50,7 +50,15 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.content}>
-        <Text style={[styles.title, themed.title]}>FlockPulse</Text>
+        <View style={styles.logoBlock}>
+          <Text style={[styles.poweredBy, themed.poweredBy]}>Powered by:</Text>
+          <Image
+            source={require("@/assets/flockpulse-logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+            accessibilityLabel="FlockPulse"
+          />
+        </View>
         <LoginForm onSubmit={isNavigating ? async () => {} : handleSubmit} />
       </View>
     </KeyboardAvoidingView>
@@ -67,10 +75,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    textAlign: "center",
+  logoBlock: {
+    alignItems: "flex-start",
     marginBottom: 32,
+  },
+  poweredBy: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  logo: {
+    // FlockPulseLogo2_AP5.png is a square/stacked mark (measured source: 2000x2000,
+    // bundled at 640x640) — fixed width rather than a screen-width percentage so it
+    // doesn't balloon into an oversized square on tablets (aspectRatio: 1 means
+    // height grows 1:1 with width, unlike web's wide 2:1 lockup).
+    width: 140,
+    aspectRatio: 1,
   },
 });
