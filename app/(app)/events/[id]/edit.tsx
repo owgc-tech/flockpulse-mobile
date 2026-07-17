@@ -24,6 +24,7 @@ import {
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
+import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
 import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
@@ -359,6 +360,17 @@ export default function EditEventScreen() {
   const [locationName, setLocationName] = useState(initialEvent.location_name ?? "");
   const [locationAddress, setLocationAddress] = useState(initialEvent.location_address ?? "");
   const [locationUrl, setLocationUrl] = useState(initialEvent.location_url ?? "");
+  // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): prefilled from
+  // the event's actual override, not always blank — leaving this field
+  // as-is and saving previously sent an explicit null (blank = tenant
+  // default, same always-sent convention as every other UpdateEventInput
+  // field below), silently clearing any existing per-event override on
+  // every unrelated edit.
+  const [rsvpClosureDays, setRsvpClosureDays] = useState(
+    initialEvent.rsvp_closure_days !== null && initialEvent.rsvp_closure_days !== undefined
+      ? String(initialEvent.rsvp_closure_days)
+      : ""
+  );
   const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">(
     initialEvent.online_meeting_resource_id ? "zoom" : initialEvent.online_meeting_url ? "other" : "none"
   );
@@ -471,6 +483,7 @@ export default function EditEventScreen() {
         prayerLeaderMemberId: prayerLeader.member_ids[0] ?? null,
         foodAssignment:
           foodAssignment.group_ids.length || foodAssignment.member_ids.length ? foodAssignment : null,
+        rsvpClosureDays: rsvpClosureDays.trim() ? Number(rsvpClosureDays.trim()) : null,
       });
 
       // FP-96-FP-97-adj-1: My Events' own mount effect (where reconciliation
@@ -490,6 +503,7 @@ export default function EditEventScreen() {
       reconcileConfirmationReminders().catch((err) =>
         console.warn("Failed to reconcile confirmation reminders:", err)
       );
+      reconcileRsvpNudges(freshEvents).catch((err) => console.warn("Failed to reconcile RSVP nudges:", err));
       router.back();
     } catch (err) {
       if (err instanceof ApiError && err.code === "MEETING_RESOURCE_CONFLICT" && err.conflict) {
@@ -593,6 +607,18 @@ export default function EditEventScreen() {
           />
         </View>
       </Modal>
+
+      <Text style={[styles.label, themed.label]}>RSVP Closure Override (days, optional)</Text>
+      <TextInput
+        style={[styles.input, themed.input]}
+        value={rsvpClosureDays}
+        onChangeText={setRsvpClosureDays}
+        keyboardType="number-pad"
+        editable={!isSubmitting}
+        placeholder="Blank = tenant default"
+        placeholderTextColor={colors.textMuted}
+        testID="edit-event-rsvp-closure-days"
+      />
 
       <Text style={[styles.label, themed.label]}>Location Name</Text>
       <TextInput

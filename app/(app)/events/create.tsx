@@ -24,6 +24,7 @@ import { listEventTypes } from "@/src/features/event-types/services/eventTypes.s
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
+import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
 import {
   formationDisplayName,
   listCourses,
@@ -344,6 +345,11 @@ export default function CreateEventScreen() {
   const [locationName, setLocationName] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
   const [locationUrl, setLocationUrl] = useState("");
+  // DIP-FP-132-FP-133-FP-134: blank = tenant default (omitted on submit),
+  // string state so the numeric TextInput can hold an in-progress/invalid
+  // value without fighting controlled-input semantics, same as `code` in
+  // MfaVerifyForm.
+  const [rsvpClosureDays, setRsvpClosureDays] = useState("");
   const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">("none");
   const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState<string | undefined>(undefined);
   const [onlineMeetingResourceLabel, setOnlineMeetingResourceLabel] = useState<string | undefined>(undefined);
@@ -440,6 +446,7 @@ export default function CreateEventScreen() {
         ...(talkId ? { talkId } : {}),
         ...(prayerLeader.member_ids[0] ? { prayerLeaderMemberId: prayerLeader.member_ids[0] } : {}),
         ...(foodAssignment.group_ids.length || foodAssignment.member_ids.length ? { foodAssignment } : {}),
+        ...(rsvpClosureDays.trim() ? { rsvpClosureDays: Number(rsvpClosureDays.trim()) } : {}),
       });
     } catch (err) {
       if (err instanceof ApiError && err.code === "MEETING_RESOURCE_CONFLICT" && err.conflict) {
@@ -478,6 +485,7 @@ export default function CreateEventScreen() {
       reconcileConfirmationReminders().catch((err) =>
         console.warn("Failed to reconcile confirmation reminders:", err)
       );
+      reconcileRsvpNudges(freshEvents).catch((err) => console.warn("Failed to reconcile RSVP nudges:", err));
       router.back();
     } catch (err) {
       // The event was created (exists in DRAFT) even though publishing
@@ -597,6 +605,18 @@ export default function CreateEventScreen() {
           />
         </View>
       </Modal>
+
+      <Text style={[styles.label, themed.label]}>RSVP Closure Override (days, optional)</Text>
+      <TextInput
+        style={[styles.input, themed.input]}
+        value={rsvpClosureDays}
+        onChangeText={setRsvpClosureDays}
+        keyboardType="number-pad"
+        editable={!isSubmitting}
+        placeholder="Blank = tenant default"
+        placeholderTextColor={colors.textMuted}
+        testID="create-event-rsvp-closure-days"
+      />
 
       <Text style={[styles.label, themed.label]}>Location Name</Text>
       <TextInput

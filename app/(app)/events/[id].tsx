@@ -13,7 +13,7 @@ import { fetchMyProfile } from "@/src/features/members/services/myProfile.servic
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
-import { getMapUrl } from "@/src/features/events/utils";
+import { getMapUrl, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type {
   EventDetail,
   EventTargetSelector,
@@ -436,7 +436,7 @@ function RsvpSection({
   onEventChange: (event: ScreenEvent) => void;
   themed: ReturnType<typeof getThemedStyles>;
 }) {
-  const editable = event.effective_status === "SCHEDULED";
+  const editable = isRsvpWindowOpen(event);
 
   const handleSubmit = async (status: RsvpStatus, reason?: string) => {
     const response = await submitRsvp(event.id, status, reason);

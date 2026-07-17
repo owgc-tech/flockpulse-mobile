@@ -37,6 +37,10 @@ export interface MyEvent {
   effective_status: EffectiveEventStatus;
   rsvp_status: RsvpStatus | null;
   rsvp_reason: string | null;
+  // DIP-FP-132-FP-133-FP-134: server-computed RSVP cutoff (start_datetime
+  // minus the event's rsvp_closure_days override or the tenant default) —
+  // confirmed live on both /api/events/mine and /api/events/:id (PR #77).
+  rsvp_closure_at: string;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -58,6 +62,12 @@ export interface MyEvent {
 export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   talk_id: string | null;
   created_by_member_id: string | null;
+  // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): the raw
+  // per-event override behind rsvp_closure_at, confirmed live on
+  // GET /api/events/:id's select list — added so edit.tsx can prefill its
+  // override field instead of always defaulting to blank (which was
+  // silently clearing any existing override on every unrelated save).
+  rsvp_closure_days: number | null;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).
@@ -101,6 +111,10 @@ export interface CreateEventInput {
   talkId?: string;
   prayerLeaderMemberId?: string;
   foodAssignment?: EventTargetSelector;
+  // DIP-FP-132-FP-133-FP-134: per-event RSVP closure override, in days
+  // before start_datetime. Omitted (not sent) falls back to the tenant
+  // default — confirmed live against POST /api/events's route handler.
+  rsvpClosureDays?: number;
 }
 
 // POST /api/events success response — confirmed live. status is always
@@ -161,6 +175,11 @@ export interface UpdateEventInput {
   talkId: string | null;
   prayerLeaderMemberId: string | null;
   foodAssignment: EventTargetSelector | null;
+  // DIP-FP-132-FP-133-FP-134: always sent (never omitted), same convention
+  // as every other field on this type — null explicitly reverts the event
+  // to the tenant default, matching PATCH /api/events/:id's JSONB
+  // key-presence patch handling confirmed live.
+  rsvpClosureDays: number | null;
 }
 
 // PATCH /api/events/:id success response — confirmed live against
