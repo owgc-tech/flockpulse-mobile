@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { apiFetch } from "@/src/lib/api";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 // GET /api/groups / GET /api/members response rows — confirmed live against
 // the route handlers. Only the fields this picker actually displays are
@@ -39,6 +41,25 @@ function summarize(value: TargetSelection): string {
   return count === 0 ? "Select..." : `${count} selected`;
 }
 
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    inputText: { color: colors.text },
+    modalContainer: { backgroundColor: colors.background },
+    modalTitle: { color: colors.text },
+    doneText: { color: colors.accent },
+    searchInput: { borderColor: colors.border, color: colors.text },
+    optionRow: { borderBottomColor: colors.border },
+    optionLabel: { color: colors.text },
+    check: { color: colors.accent },
+    error: { color: colors.danger },
+  });
+}
+
 export function MemberGroupPicker({
   label,
   value,
@@ -46,6 +67,8 @@ export function MemberGroupPicker({
   allowGroups = true,
   singleMember = false,
 }: MemberGroupPickerProps) {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [isOpen, setIsOpen] = useState(false);
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [members, setMembers] = useState<MemberOption[]>([]);
@@ -115,23 +138,24 @@ export function MemberGroupPicker({
 
   return (
     <View>
-      <Text style={styles.label}>{label}</Text>
-      <Pressable style={styles.input} onPress={() => setIsOpen(true)} testID={`picker-open-${label}`}>
-        <Text>{summarize(value)}</Text>
+      <Text style={[styles.label, themed.label]}>{label}</Text>
+      <Pressable style={[styles.input, themed.input]} onPress={() => setIsOpen(true)} testID={`picker-open-${label}`}>
+        <Text style={themed.inputText}>{summarize(value)}</Text>
       </Pressable>
 
       <Modal visible={isOpen} animationType="slide" onRequestClose={() => setIsOpen(false)}>
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, themed.modalContainer]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{label}</Text>
+            <Text style={[styles.modalTitle, themed.modalTitle]}>{label}</Text>
             <Pressable onPress={() => setIsOpen(false)} testID="picker-done">
-              <Text style={styles.doneText}>Done</Text>
+              <Text style={[styles.doneText, themed.doneText]}>Done</Text>
             </Pressable>
           </View>
 
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, themed.searchInput]}
             placeholder="Search"
+            placeholderTextColor={colors.textMuted}
             value={filter}
             onChangeText={setFilter}
             testID="picker-search"
@@ -140,7 +164,7 @@ export function MemberGroupPicker({
           {isLoading ? (
             <ActivityIndicator style={styles.center} />
           ) : error ? (
-            <Text style={styles.error}>{error}</Text>
+            <Text style={[styles.error, themed.error]}>{error}</Text>
           ) : (
             <FlatList
               data={rows}
@@ -150,15 +174,15 @@ export function MemberGroupPicker({
                   item.kind === "group" ? value.group_ids.includes(item.id) : value.member_ids.includes(item.id);
                 return (
                   <Pressable
-                    style={styles.optionRow}
+                    style={[styles.optionRow, themed.optionRow]}
                     onPress={() => (item.kind === "group" ? toggleGroup(item.id) : toggleMember(item.id))}
                     testID={`picker-option-${item.kind}-${item.id}`}
                   >
-                    <Text style={styles.optionLabel}>
+                    <Text style={[styles.optionLabel, themed.optionLabel]}>
                       {item.label}
                       {item.kind === "group" ? " (Group)" : ""}
                     </Text>
-                    {selected ? <Text style={styles.check}>✓</Text> : null}
+                    {selected ? <Text style={[styles.check, themed.check]}>✓</Text> : null}
                   </Pressable>
                 );
               }}

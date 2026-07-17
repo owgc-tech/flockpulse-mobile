@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -35,8 +35,41 @@ import type { TargetSelection } from "@/src/features/shared/components/MemberGro
 import type { EventType } from "@/src/features/event-types/types";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
 import type { CreatedEvent, MeetingResource } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 const EMPTY_SELECTION: TargetSelection = { group_ids: [], member_ids: [] };
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays. Shared by
+// all three components in this file (CreateEventScreen, FormationTalkPicker,
+// MeetingResourcePicker), computed once in CreateEventScreen and passed down
+// as a prop — same convention as confirmations/index.tsx's ConfirmationItem.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    backLinkText: { color: colors.accent },
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    inputText: { color: colors.text },
+    optionButton: { backgroundColor: colors.backgroundSecondary },
+    optionButtonSelected: { backgroundColor: colors.accent },
+    optionText: { color: colors.text },
+    submitButton: { backgroundColor: colors.accent },
+    error: { color: colors.danger },
+    modalContainer: { backgroundColor: colors.background },
+    modalTitle: { color: colors.text },
+    doneText: { color: colors.accent },
+    linkText: { color: colors.accent },
+    iosPickerCard: { backgroundColor: colors.cardBackground },
+    iosPickerHeader: { borderBottomColor: colors.border },
+    optionRow: { borderBottomColor: colors.border },
+    optionRowSelected: { backgroundColor: colors.backgroundSecondary },
+    optionLabel: { color: colors.text },
+    optionLabelSelected: { color: colors.accent },
+  });
+}
 
 function formatDateTime(date: Date | null): string {
   if (!date) return "Select date & time";
@@ -52,9 +85,11 @@ function formatDateTime(date: Date | null): string {
 function FormationTalkPicker({
   talkLabel,
   onChange,
+  themed,
 }: {
   talkLabel: string | undefined;
   onChange: (talkId: string | undefined, label: string | undefined) => void;
+  themed: ReturnType<typeof getThemedStyles>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState<"course" | "module" | "talk">("course");
@@ -112,19 +147,19 @@ function FormationTalkPicker({
 
   return (
     <View>
-      <Text style={styles.label}>Formation Talk (optional)</Text>
-      <Pressable style={styles.input} onPress={openPicker} testID="formation-talk-open">
-        <Text>{talkLabel ?? "None"}</Text>
+      <Text style={[styles.label, themed.label]}>Formation Talk (optional)</Text>
+      <Pressable style={[styles.input, themed.input]} onPress={openPicker} testID="formation-talk-open">
+        <Text style={themed.inputText}>{talkLabel ?? "None"}</Text>
       </Pressable>
 
       <Modal visible={isOpen} animationType="slide" onRequestClose={() => setIsOpen(false)}>
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, themed.modalContainer]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
+            <Text style={[styles.modalTitle, themed.modalTitle]}>
               {step === "course" ? "Select Course" : step === "module" ? "Select Module" : "Select Talk"}
             </Text>
             <Pressable onPress={() => setIsOpen(false)} testID="formation-talk-close">
-              <Text style={styles.doneText}>Cancel</Text>
+              <Text style={[styles.doneText, themed.doneText]}>Cancel</Text>
             </Pressable>
           </View>
 
@@ -134,31 +169,31 @@ function FormationTalkPicker({
                 onPress={() => setStep(step === "talk" ? "module" : "course")}
                 testID="formation-talk-back"
               >
-                <Text style={styles.linkText}>‹ Back</Text>
+                <Text style={[styles.linkText, themed.linkText]}>‹ Back</Text>
               </Pressable>
             ) : (
               <View />
             )}
             <Pressable onPress={handleClear} testID="formation-talk-clear">
-              <Text style={styles.linkText}>Clear selection</Text>
+              <Text style={[styles.linkText, themed.linkText]}>Clear selection</Text>
             </Pressable>
           </View>
 
           {isLoading ? (
             <ActivityIndicator style={styles.center} />
           ) : error ? (
-            <Text style={styles.error}>{error}</Text>
+            <Text style={[styles.error, themed.error]}>{error}</Text>
           ) : step === "course" ? (
             <FlatList
               data={courses}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={styles.optionRow}
+                  style={[styles.optionRow, themed.optionRow]}
                   onPress={() => handleSelectCourse(item)}
                   testID={`formation-course-${item.id}`}
                 >
-                  <Text style={styles.optionLabel}>{formationDisplayName(item)}</Text>
+                  <Text style={[styles.optionLabel, themed.optionLabel]}>{formationDisplayName(item)}</Text>
                 </Pressable>
               )}
             />
@@ -168,11 +203,11 @@ function FormationTalkPicker({
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={styles.optionRow}
+                  style={[styles.optionRow, themed.optionRow]}
                   onPress={() => handleSelectModule(item)}
                   testID={`formation-module-${item.id}`}
                 >
-                  <Text style={styles.optionLabel}>{formationDisplayName(item)}</Text>
+                  <Text style={[styles.optionLabel, themed.optionLabel]}>{formationDisplayName(item)}</Text>
                 </Pressable>
               )}
             />
@@ -182,11 +217,11 @@ function FormationTalkPicker({
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={styles.optionRow}
+                  style={[styles.optionRow, themed.optionRow]}
                   onPress={() => handleSelectTalk(item)}
                   testID={`formation-talk-${item.id}`}
                 >
-                  <Text style={styles.optionLabel}>{formationDisplayName(item)}</Text>
+                  <Text style={[styles.optionLabel, themed.optionLabel]}>{formationDisplayName(item)}</Text>
                 </Pressable>
               )}
             />
@@ -204,10 +239,12 @@ function MeetingResourcePicker({
   resourceLabel,
   selectedResourceId,
   onChange,
+  themed,
 }: {
   resourceLabel: string | undefined;
   selectedResourceId: string | undefined;
   onChange: (resourceId: string | undefined, label: string | undefined) => void;
+  themed: ReturnType<typeof getThemedStyles>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [resources, setResources] = useState<MeetingResource[]>([]);
@@ -236,42 +273,52 @@ function MeetingResourcePicker({
 
   return (
     <View>
-      <Text style={styles.label}>Zoom Account</Text>
-      <Pressable style={styles.input} onPress={openPicker} testID="meeting-resource-open">
-        <Text>{resourceLabel ?? "None"}</Text>
+      <Text style={[styles.label, themed.label]}>Zoom Account</Text>
+      <Pressable style={[styles.input, themed.input]} onPress={openPicker} testID="meeting-resource-open">
+        <Text style={themed.inputText}>{resourceLabel ?? "None"}</Text>
       </Pressable>
 
       <Modal visible={isOpen} animationType="slide" onRequestClose={() => setIsOpen(false)}>
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, themed.modalContainer]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Zoom Account</Text>
+            <Text style={[styles.modalTitle, themed.modalTitle]}>Select Zoom Account</Text>
             <Pressable onPress={() => setIsOpen(false)} testID="meeting-resource-close">
-              <Text style={styles.doneText}>Cancel</Text>
+              <Text style={[styles.doneText, themed.doneText]}>Cancel</Text>
             </Pressable>
           </View>
 
           <View style={styles.modalActionsRow}>
             <View />
             <Pressable onPress={handleClear} testID="meeting-resource-clear">
-              <Text style={styles.linkText}>Clear selection</Text>
+              <Text style={[styles.linkText, themed.linkText]}>Clear selection</Text>
             </Pressable>
           </View>
 
           {isLoading ? (
             <ActivityIndicator style={styles.center} />
           ) : error ? (
-            <Text style={styles.error}>{error}</Text>
+            <Text style={[styles.error, themed.error]}>{error}</Text>
           ) : (
             <FlatList
               data={resources}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
-                  style={[styles.optionRow, item.id === selectedResourceId && styles.optionRowSelected]}
+                  style={[
+                    styles.optionRow,
+                    themed.optionRow,
+                    item.id === selectedResourceId && [styles.optionRowSelected, themed.optionRowSelected],
+                  ]}
                   onPress={() => handleSelect(item)}
                   testID={`meeting-resource-${item.id}`}
                 >
-                  <Text style={[styles.optionLabel, item.id === selectedResourceId && styles.optionLabelSelected]}>
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      themed.optionLabel,
+                      item.id === selectedResourceId && [styles.optionLabelSelected, themed.optionLabelSelected],
+                    ]}
+                  >
                     {item.name}
                   </Text>
                 </Pressable>
@@ -285,6 +332,8 @@ function MeetingResourcePicker({
 }
 
 export default function CreateEventScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [name, setName] = useState("");
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [eventTypeId, setEventTypeId] = useState<string | null>(null);
@@ -445,55 +494,60 @@ export default function CreateEventScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-        <Text style={styles.backLinkText}>‹ Back</Text>
+        <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
       </Pressable>
 
-      <Text style={styles.label}>Name</Text>
+      <Text style={[styles.label, themed.label]}>Name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={name}
         onChangeText={setName}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="create-event-name"
       />
 
-      <Text style={styles.label}>Event Type</Text>
+      <Text style={[styles.label, themed.label]}>Event Type</Text>
       <View style={styles.optionsRow}>
         {eventTypes.map((type) => (
           <Pressable
             key={type.id}
-            style={[styles.optionButton, eventTypeId === type.id && styles.optionButtonSelected]}
+            style={[
+              styles.optionButton,
+              themed.optionButton,
+              eventTypeId === type.id && [styles.optionButtonSelected, themed.optionButtonSelected],
+            ]}
             onPress={() => setEventTypeId(type.id)}
             disabled={isSubmitting}
             testID={`create-event-type-${type.id}`}
           >
-            <Text style={[styles.optionText, eventTypeId === type.id && styles.optionTextSelected]}>
+            <Text style={[styles.optionText, themed.optionText, eventTypeId === type.id && styles.optionTextSelected]}>
               {type.name}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.label}>Start</Text>
+      <Text style={[styles.label, themed.label]}>Start</Text>
       <Pressable
-        style={styles.input}
+        style={[styles.input, themed.input]}
         onPress={() => openDateTimePicker("start")}
         disabled={isSubmitting}
         testID="create-event-start"
       >
-        <Text>{formatDateTime(startDatetime)}</Text>
+        <Text style={themed.inputText}>{formatDateTime(startDatetime)}</Text>
       </Pressable>
 
-      <Text style={styles.label}>End</Text>
+      <Text style={[styles.label, themed.label]}>End</Text>
       <Pressable
-        style={styles.input}
+        style={[styles.input, themed.input]}
         onPress={() => openDateTimePicker("end")}
         disabled={isSubmitting}
         testID="create-event-end"
       >
-        <Text>{formatDateTime(endDatetime)}</Text>
+        <Text style={themed.inputText}>{formatDateTime(endDatetime)}</Text>
       </Pressable>
 
       {/* DIP Grounding Check: display="spinner" fires onChange on every
@@ -514,10 +568,10 @@ export default function CreateEventScreen() {
           onPress={() => setShowIosPicker(null)}
           testID="ios-picker-backdrop"
         />
-        <View style={styles.iosPickerCard}>
-          <View style={styles.iosPickerHeader}>
+        <View style={[styles.iosPickerCard, themed.iosPickerCard]}>
+          <View style={[styles.iosPickerHeader, themed.iosPickerHeader]}>
             <Pressable onPress={() => setShowIosPicker(null)} testID="ios-picker-cancel">
-              <Text style={styles.linkText}>Cancel</Text>
+              <Text style={[styles.linkText, themed.linkText]}>Cancel</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -529,7 +583,7 @@ export default function CreateEventScreen() {
               }}
               testID="ios-picker-done"
             >
-              <Text style={styles.doneText}>Done</Text>
+              <Text style={[styles.doneText, themed.doneText]}>Done</Text>
             </Pressable>
           </View>
           <DateTimePicker
@@ -544,45 +598,52 @@ export default function CreateEventScreen() {
         </View>
       </Modal>
 
-      <Text style={styles.label}>Location Name</Text>
+      <Text style={[styles.label, themed.label]}>Location Name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={locationName}
         onChangeText={setLocationName}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="create-event-location-name"
       />
 
-      <Text style={styles.label}>Location Address</Text>
+      <Text style={[styles.label, themed.label]}>Location Address</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={locationAddress}
         onChangeText={setLocationAddress}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="create-event-location-address"
       />
 
-      <Text style={styles.label}>Location URL (optional)</Text>
+      <Text style={[styles.label, themed.label]}>Location URL (optional)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={locationUrl}
         onChangeText={setLocationUrl}
         editable={!isSubmitting}
         autoCapitalize="none"
+        placeholderTextColor={colors.textMuted}
         testID="create-event-location-url"
       />
 
-      <Text style={styles.label}>Online Meeting (optional)</Text>
+      <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>
       <View style={styles.optionsRow}>
         {(["none", "zoom", "other"] as const).map((mode) => (
           <Pressable
             key={mode}
-            style={[styles.optionButton, meetingMode === mode && styles.optionButtonSelected]}
+            style={[
+              styles.optionButton,
+              themed.optionButton,
+              meetingMode === mode && [styles.optionButtonSelected, themed.optionButtonSelected],
+            ]}
             onPress={() => setMeetingMode(mode)}
             disabled={isSubmitting}
             testID={`create-event-meeting-mode-${mode}`}
           >
-            <Text style={[styles.optionText, meetingMode === mode && styles.optionTextSelected]}>
+            <Text style={[styles.optionText, themed.optionText, meetingMode === mode && styles.optionTextSelected]}>
               {mode === "none" ? "None" : mode === "zoom" ? "Zoom Account" : "Other Platform"}
             </Text>
           </Pressable>
@@ -597,28 +658,31 @@ export default function CreateEventScreen() {
             setOnlineMeetingResourceId(id);
             setOnlineMeetingResourceLabel(label);
           }}
+          themed={themed}
         />
       ) : null}
 
       {meetingMode === "other" ? (
         <>
-          <Text style={styles.label}>Platform Name</Text>
+          <Text style={[styles.label, themed.label]}>Platform Name</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, themed.input]}
             value={onlineMeetingPlatformLabel}
             onChangeText={setOnlineMeetingPlatformLabel}
             editable={!isSubmitting}
             placeholder="e.g. Google Meet"
+            placeholderTextColor={colors.textMuted}
             testID="create-event-meeting-platform-label"
           />
 
-          <Text style={styles.label}>Meeting Link</Text>
+          <Text style={[styles.label, themed.label]}>Meeting Link</Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, themed.input]}
             value={onlineMeetingUrl}
             onChangeText={setOnlineMeetingUrl}
             editable={!isSubmitting}
             autoCapitalize="none"
+            placeholderTextColor={colors.textMuted}
             testID="create-event-meeting-url"
           />
         </>
@@ -632,6 +696,7 @@ export default function CreateEventScreen() {
           setTalkId(id);
           setTalkLabel(label);
         }}
+        themed={themed}
       />
 
       <MemberGroupPicker
@@ -645,13 +710,13 @@ export default function CreateEventScreen() {
       <MemberGroupPicker label="Food Assignment (optional)" value={foodAssignment} onChange={setFoodAssignment} />
 
       {error ? (
-        <Text style={styles.error} testID="create-event-error">
+        <Text style={[styles.error, themed.error]} testID="create-event-error">
           {error}
         </Text>
       ) : null}
 
       <Pressable
-        style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
+        style={[styles.submitButton, themed.submitButton, isSubmitting && styles.buttonDisabled]}
         onPress={handleSubmit}
         disabled={isSubmitting}
         testID="create-event-submit"

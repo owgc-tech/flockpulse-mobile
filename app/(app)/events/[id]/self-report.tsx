@@ -1,12 +1,39 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
 import { getEventById } from "@/src/features/events/services/events.service";
 import { ApiError } from "@/src/lib/api";
 import type { MyEvent } from "@/src/features/events/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 const STAR_VALUES = [1, 2, 3, 4, 5];
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    backLinkText: { color: colors.accent },
+    center: { backgroundColor: colors.background },
+    name: { color: colors.text },
+    meta: { color: colors.textSecondary },
+    metaSecondary: { color: colors.textMuted },
+    rsvp: { color: colors.textSecondary },
+    divider: { backgroundColor: colors.divider },
+    sectionTitle: { color: colors.text },
+    info: { color: colors.textSecondary },
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    buttonNeutral: { backgroundColor: colors.backgroundSecondary },
+    buttonSelected: { backgroundColor: colors.accent },
+    buttonText: { color: colors.text },
+    submitButton: { backgroundColor: colors.success },
+    error: { color: colors.danger },
+  });
+}
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -26,6 +53,8 @@ function rsvpLabel(event: MyEvent): string {
 type ViewState = "form" | "already-responded" | "submitted";
 
 export default function SelfReportScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const params = useLocalSearchParams<{ id: string; event?: string }>();
   const [event, setEvent] = useState<MyEvent | null>(null);
   const [parseError, setParseError] = useState(false);
@@ -69,11 +98,11 @@ export default function SelfReportScreen() {
 
   if (parseError || !event) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, themed.center]}>
         <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-          <Text style={styles.backLinkText}>‹ Back</Text>
+          <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
         </Pressable>
-        <Text style={styles.error}>
+        <Text style={[styles.error, themed.error]}>
           {parseError ? "Couldn't open this event — please go back and try again." : "Loading…"}
         </Text>
       </View>
@@ -113,51 +142,65 @@ export default function SelfReportScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-        <Text style={styles.backLinkText}>‹ Back</Text>
+        <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
       </Pressable>
 
-      <Text style={styles.name}>{event.name}</Text>
-      <Text style={styles.meta}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      <Text style={styles.meta}>{event.location_name}</Text>
-      <Text style={styles.metaSecondary}>{event.location_address}</Text>
-      <Text style={styles.rsvp}>{rsvpLabel(event)}</Text>
+      <Text style={[styles.name, themed.name]}>{event.name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
+      <Text style={[styles.meta, themed.meta]}>{event.location_name}</Text>
+      <Text style={[styles.metaSecondary, themed.metaSecondary]}>{event.location_address}</Text>
+      <Text style={[styles.rsvp, themed.rsvp]}>{rsvpLabel(event)}</Text>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, themed.divider]} />
 
       {viewState === "already-responded" ? (
-        <Text style={styles.info} testID="self-report-already-responded">
+        <Text style={[styles.info, themed.info]} testID="self-report-already-responded">
           You&apos;ve already submitted a self-report for this event.
         </Text>
       ) : viewState === "submitted" ? (
-        <Text style={styles.info} testID="self-report-submitted">Thanks — your self-report was submitted.</Text>
+        <Text style={[styles.info, themed.info]} testID="self-report-submitted">Thanks — your self-report was submitted.</Text>
       ) : (
         <>
-          <Text style={styles.sectionTitle}>Did you attend?</Text>
+          <Text style={[styles.sectionTitle, themed.sectionTitle]}>Did you attend?</Text>
 
           <View style={styles.row}>
             <Pressable
-              style={[styles.button, styles.buttonNeutral, attended === true && styles.buttonSelected]}
+              style={[
+                styles.button,
+                styles.buttonNeutral,
+                themed.buttonNeutral,
+                attended === true && [styles.buttonSelected, themed.buttonSelected],
+              ]}
               onPress={() => setAttended(true)}
               disabled={isSubmitting}
               testID="self-report-yes"
             >
-              <Text style={[styles.buttonText, attended === true && styles.buttonTextSelected]}>Yes</Text>
+              <Text style={[styles.buttonText, themed.buttonText, attended === true && styles.buttonTextSelected]}>
+                Yes
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.button, styles.buttonNeutral, attended === false && styles.buttonSelected]}
+              style={[
+                styles.button,
+                styles.buttonNeutral,
+                themed.buttonNeutral,
+                attended === false && [styles.buttonSelected, themed.buttonSelected],
+              ]}
               onPress={() => setAttended(false)}
               disabled={isSubmitting}
               testID="self-report-no"
             >
-              <Text style={[styles.buttonText, attended === false && styles.buttonTextSelected]}>No</Text>
+              <Text style={[styles.buttonText, themed.buttonText, attended === false && styles.buttonTextSelected]}>
+                No
+              </Text>
             </Pressable>
           </View>
 
           {attended === true ? (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Rating</Text>
+              <Text style={[styles.label, themed.label]}>Rating</Text>
               <View style={styles.starsRow}>
                 {STAR_VALUES.map((value) => (
                   <Pressable key={value} onPress={() => setStarRating(value)} disabled={isSubmitting} testID={`self-report-star-${value}`}>
@@ -166,38 +209,40 @@ export default function SelfReportScreen() {
                 ))}
               </View>
 
-              <Text style={styles.label}>Feedback (optional)</Text>
+              <Text style={[styles.label, themed.label]}>Feedback (optional)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, themed.input]}
                 value={feedback}
                 onChangeText={(text) => setFeedback(text.slice(0, 1000))}
                 multiline
                 editable={!isSubmitting}
+                placeholderTextColor={colors.textMuted}
                 testID="self-report-feedback-input"
               />
             </View>
           ) : attended === false ? (
             <View style={styles.formSection}>
-              <Text style={styles.label}>Reason</Text>
+              <Text style={[styles.label, themed.label]}>Reason</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, themed.input]}
                 value={reason}
                 onChangeText={setReason}
                 multiline
                 editable={!isSubmitting}
+                placeholderTextColor={colors.textMuted}
                 testID="self-report-reason-input"
               />
             </View>
           ) : null}
 
           {error ? (
-            <Text style={styles.error} testID="self-report-error">
+            <Text style={[styles.error, themed.error]} testID="self-report-error">
               {error}
             </Text>
           ) : null}
 
           <Pressable
-            style={[styles.submitButton, attended === null && styles.buttonDisabled]}
+            style={[styles.submitButton, themed.submitButton, attended === null && styles.buttonDisabled]}
             onPress={handleSubmit}
             disabled={isSubmitting || attended === null}
             testID="self-report-submit"

@@ -1,10 +1,24 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { LoginForm } from "@/src/features/auth/components/LoginForm";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signInWithPassword } from "@/src/features/auth/services/auth.service";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    title: { color: colors.text },
+  });
+}
 
 export default function LoginScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [isNavigating, setIsNavigating] = useState(false);
 
   const handleSubmit = async (email: string, password: string) => {
@@ -32,11 +46,11 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, themed.container]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>FlockPulse</Text>
+        <Text style={[styles.title, themed.title]}>FlockPulse</Text>
         <LoginForm onSubmit={isNavigating ? async () => {} : handleSubmit} />
       </View>
     </KeyboardAvoidingView>

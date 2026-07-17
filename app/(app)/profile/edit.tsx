@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
 
 const GENDER_OPTIONS: { value: Gender; label: string }[] = [
   { value: "MALE", label: "Male" },
@@ -24,7 +26,33 @@ function toDateOnlyString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    center: { backgroundColor: colors.background },
+    backLinkText: { color: colors.accent },
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    inputText: { color: colors.text },
+    optionButton: { backgroundColor: colors.backgroundSecondary },
+    optionButtonSelected: { backgroundColor: colors.accent },
+    optionText: { color: colors.text },
+    groupsList: { borderColor: colors.border },
+    groupRow: { borderBottomColor: colors.border },
+    groupName: { color: colors.text },
+    groupRemoveIcon: { color: colors.textMuted },
+    groupsEmpty: { color: colors.textSecondary },
+    button: { backgroundColor: colors.accent },
+    error: { color: colors.danger },
+  });
+}
+
 export default function EditProfileScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +125,9 @@ export default function EditProfileScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, themed.center]}>
         <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-          <Text style={styles.backLinkText}>‹ Back</Text>
+          <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
         </Pressable>
         <ActivityIndicator />
       </View>
@@ -107,66 +135,83 @@ export default function EditProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
-        <Text style={styles.backLinkText}>‹ Back</Text>
+        <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
       </Pressable>
 
-      <Text style={styles.label}>First name</Text>
+      <Text style={[styles.label, themed.label]}>First name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={firstName}
         onChangeText={setFirstName}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="edit-first-name"
       />
 
-      <Text style={styles.label}>Last name</Text>
+      <Text style={[styles.label, themed.label]}>Last name</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, themed.input]}
         value={lastName}
         onChangeText={setLastName}
         editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
         testID="edit-last-name"
       />
 
-      <Text style={styles.label}>Gender</Text>
+      <Text style={[styles.label, themed.label]}>Gender</Text>
       <View style={styles.optionsRow}>
         {GENDER_OPTIONS.map((option) => (
           <Pressable
             key={option.value}
-            style={[styles.optionButton, gender === option.value && styles.optionButtonSelected]}
+            style={[
+              styles.optionButton,
+              themed.optionButton,
+              gender === option.value && [styles.optionButtonSelected, themed.optionButtonSelected],
+            ]}
             onPress={() => setGender(option.value)}
             disabled={isSubmitting}
             testID={`edit-gender-${option.value}`}
           >
-            <Text style={[styles.optionText, gender === option.value && styles.optionTextSelected]}>
+            <Text style={[styles.optionText, themed.optionText, gender === option.value && styles.optionTextSelected]}>
               {option.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.label}>Marital status</Text>
+      <Text style={[styles.label, themed.label]}>Marital status</Text>
       <View style={styles.optionsRow}>
         {MARITAL_STATUS_OPTIONS.map((option) => (
           <Pressable
             key={option.value}
-            style={[styles.optionButton, maritalStatus === option.value && styles.optionButtonSelected]}
+            style={[
+              styles.optionButton,
+              themed.optionButton,
+              maritalStatus === option.value && [styles.optionButtonSelected, themed.optionButtonSelected],
+            ]}
             onPress={() => setMaritalStatus(option.value)}
             disabled={isSubmitting}
             testID={`edit-marital-status-${option.value}`}
           >
-            <Text style={[styles.optionText, maritalStatus === option.value && styles.optionTextSelected]}>
+            <Text
+              style={[styles.optionText, themed.optionText, maritalStatus === option.value && styles.optionTextSelected]}
+            >
               {option.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.label}>Birthdate</Text>
-      <Pressable style={styles.input} onPress={handlePressBirthdate} disabled={isSubmitting} testID="edit-birthdate">
-        <Text>{birthdate ? birthdate.toLocaleDateString() : "Select birthdate"}</Text>
+      <Text style={[styles.label, themed.label]}>Birthdate</Text>
+      <Pressable
+        style={[styles.input, themed.input]}
+        onPress={handlePressBirthdate}
+        disabled={isSubmitting}
+        testID="edit-birthdate"
+      >
+        <Text style={themed.inputText}>{birthdate ? birthdate.toLocaleDateString() : "Select birthdate"}</Text>
       </Pressable>
       {Platform.OS === "ios" && showIosDatePicker ? (
         <DateTimePicker
@@ -184,35 +229,35 @@ export default function EditProfileScreen() {
         />
       ) : null}
 
-      <Text style={styles.label}>Groups</Text>
+      <Text style={[styles.label, themed.label]}>Groups</Text>
       {groups.length > 0 ? (
-        <View style={styles.groupsList}>
+        <View style={[styles.groupsList, themed.groupsList]}>
           {groups.map((group) => (
-            <View key={group.id} style={styles.groupRow} testID={`edit-group-${group.id}`}>
-              <Text style={styles.groupName}>{group.name}</Text>
+            <View key={group.id} style={[styles.groupRow, themed.groupRow]} testID={`edit-group-${group.id}`}>
+              <Text style={[styles.groupName, themed.groupName]}>{group.name}</Text>
               {/* Not yet functional — no backend exists yet for a member to
                   remove themselves from a group (DELETE /api/assignments is
                   Admin-only). Rendered visually as a fast-follow marker;
                   deliberately no onPress rather than faking success or
                   silently no-op'ing on tap. */}
-              <Text style={styles.groupRemoveIcon} testID={`edit-group-remove-${group.id}`}>
+              <Text style={[styles.groupRemoveIcon, themed.groupRemoveIcon]} testID={`edit-group-remove-${group.id}`}>
                 ×
               </Text>
             </View>
           ))}
         </View>
       ) : (
-        <Text style={styles.groupsEmpty}>No groups</Text>
+        <Text style={[styles.groupsEmpty, themed.groupsEmpty]}>No groups</Text>
       )}
 
       {error ? (
-        <Text style={styles.error} testID="edit-profile-error">
+        <Text style={[styles.error, themed.error]} testID="edit-profile-error">
           {error}
         </Text>
       ) : null}
 
       <Pressable
-        style={[styles.button, isSubmitting && styles.buttonDisabled]}
+        style={[styles.button, themed.button, isSubmitting && styles.buttonDisabled]}
         onPress={handleSubmit}
         disabled={isSubmitting}
         testID="edit-profile-submit"

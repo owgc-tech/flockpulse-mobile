@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { MfaEnrollForm } from "@/src/features/auth/components/MfaEnrollForm";
@@ -15,8 +15,24 @@ import {
 } from "@/src/features/auth/services/biometricTrust.service";
 import { supabase } from "@/src/lib/supabase";
 import type { TotpEnrollment } from "@/src/features/auth/types";
+import { useThemeColors } from "@/src/theme/useThemeColors";
+import type { ThemeColors } from "@/src/theme/colors";
+
+// Only the color-bearing keys from `styles` below, recomputed from the
+// current theme at render time — everything structural stays in the static
+// StyleSheet.create() untouched. Merged on top via style arrays.
+function getThemedStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { backgroundColor: colors.background },
+    center: { backgroundColor: colors.background },
+    title: { color: colors.text },
+    error: { color: colors.danger },
+  });
+}
 
 export default function MfaEnrollScreen() {
+  const colors = useThemeColors();
+  const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,23 +81,23 @@ export default function MfaEnrollScreen() {
 
   if (error) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error}</Text>
+      <View style={[styles.center, themed.center]}>
+        <Text style={[styles.error, themed.error]}>{error}</Text>
       </View>
     );
   }
 
   if (!enrollment) {
     return (
-      <View style={styles.center}>
+      <View style={[styles.center, themed.center]}>
         <ActivityIndicator />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Set Up Two-Factor Authentication</Text>
+    <ScrollView contentContainerStyle={[styles.container, themed.container]}>
+      <Text style={[styles.title, themed.title]}>Set Up Two-Factor Authentication</Text>
       <MfaEnrollForm enrollment={enrollment} onVerify={handleVerify} />
     </ScrollView>
   );
