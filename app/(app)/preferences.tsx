@@ -9,6 +9,13 @@ import {
 } from "@/src/features/notifications/services/reminderSettings.service";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
+import { useThemePreference, type ThemePreference } from "@/src/theme/ThemePreferenceContext";
+
+const APPEARANCE_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 // DIP-FP-110: soft cap, not a hard business rule — just keeps a member from
 // entering something absurd (e.g. a typo'd extra digit) into a slot.
@@ -35,12 +42,19 @@ function getThemedStyles(colors: ThemeColors) {
     input: { borderColor: colors.border, color: colors.text },
     button: { backgroundColor: colors.accent },
     error: { color: colors.danger },
+    divider: { backgroundColor: colors.divider },
+    sectionTitle: { color: colors.text },
+    segmentButton: { backgroundColor: colors.cardBackground, borderColor: colors.border },
+    segmentButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+    segmentButtonText: { color: colors.text },
+    segmentButtonTextActive: { color: "#fff" },
   });
 }
 
 export default function PreferencesScreen() {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
+  const { preference, setPreference } = useThemePreference();
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +160,37 @@ export default function PreferencesScreen() {
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save</Text>}
       </Pressable>
+
+      <View style={[styles.divider, themed.divider]} />
+
+      {/* DIP-FP-145: applies immediately via context update, unlike the
+          hours fields above — no Save button for this control, and it's
+          placed below Save so it doesn't read as part of what Save applies to. */}
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Appearance</Text>
+      <View style={styles.segmentedControl}>
+        {APPEARANCE_OPTIONS.map((option) => (
+          <Pressable
+            key={option.value}
+            style={[
+              styles.segmentButton,
+              themed.segmentButton,
+              option.value === preference && [styles.segmentButtonActive, themed.segmentButtonActive],
+            ]}
+            onPress={() => setPreference(option.value)}
+            testID={`appearance-${option.value}`}
+          >
+            <Text
+              style={[
+                styles.segmentButtonText,
+                themed.segmentButtonText,
+                option.value === preference && [styles.segmentButtonTextActive, themed.segmentButtonTextActive],
+              ]}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
     </ScrollView>
   );
 }
@@ -209,5 +254,38 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 13,
     marginTop: 16,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#ddd",
+    marginVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  segmentedControl: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  segmentButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  segmentButtonActive: {
+    borderColor: "#2563eb",
+    backgroundColor: "#2563eb",
+  },
+  segmentButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  segmentButtonTextActive: {
+    color: "#fff",
   },
 });

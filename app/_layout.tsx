@@ -1,10 +1,12 @@
 import { useEffect } from "react";
+import { useColorScheme } from "react-native";
 import { router, Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
 import "@/src/lib/supabase";
 import type { NotificationDataPayload, NotificationType } from "@/src/features/notifications/types";
+import { ThemePreferenceProvider, useThemePreference } from "@/src/theme/ThemePreferenceContext";
 
 function navigateFromNotification(response: Notifications.NotificationResponse) {
   const data = response.notification.request.content.data as Partial<NotificationDataPayload> | undefined;
@@ -40,6 +42,30 @@ function navigateFromNotification(response: Notifications.NotificationResponse) 
   });
 }
 
+// DIP-FP-145: StatusBar previously used style="auto", which follows the OS
+// scheme directly — independent of the theme override above. That left the
+// status bar visibly wrong whenever a member's override disagreed with their
+// device's OS setting (e.g. overriding to Light while the OS is in Dark).
+// Computing it from the same effective (override-or-system) theme as
+// useThemeColors() keeps it consistent. This needs to be a child of
+// ThemePreferenceProvider (to call useThemePreference()), so it can't live
+// directly in RootLayout, which renders the provider itself.
+function RootLayoutContent() {
+  const { preference } = useThemePreference();
+  const systemScheme = useColorScheme();
+  const effectiveScheme = preference === "system" ? systemScheme : preference;
+
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
+      </Stack>
+      <StatusBar style={effectiveScheme === "dark" ? "light" : "dark"} />
+    </>
+  );
+}
+
 export default function RootLayout() {
   // Root layout, not (app)'s — active regardless of auth state, so a tap
   // is never silently dropped just because the user isn't signed in yet.
@@ -64,11 +90,9 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
-      </Stack>
-      <StatusBar style="auto" />
+      <ThemePreferenceProvider>
+        <RootLayoutContent />
+      </ThemePreferenceProvider>
     </SafeAreaProvider>
   );
 }
