@@ -1,4 +1,5 @@
-import type { MyEvent } from "@/src/features/events/types";
+import type { MyEvent, RsvpStatus } from "@/src/features/events/types";
+import type { ThemeColors } from "@/src/theme/colors";
 
 // ASSUMPTION (not specified in any story): when an event has no
 // location_url, fall back to a Google Maps universal-link search query
@@ -19,4 +20,21 @@ export function getMapUrl(event: MyEvent): string {
 // awareness now that rsvp_closure_at is server-computed (PR #77).
 export function isRsvpWindowOpen(event: Pick<MyEvent, "effective_status" | "rsvp_closure_at">): boolean {
   return event.effective_status === "SCHEDULED" && Date.now() < new Date(event.rsvp_closure_at).getTime();
+}
+
+// DIP-FP-143: shared Accept=green/Decline=red/Tentative=amber/No
+// response=grey mapping for every mobile surface keyed off RsvpStatus
+// (EventListItem, RsvpControls, self-report) — RosterList uses its own
+// RosterResponseValue type and getResponseColors(), left as-is.
+export function getRsvpStatusColor(colors: ThemeColors, status: RsvpStatus | null): string {
+  switch (status) {
+    case "YES":
+      return colors.success;
+    case "NO":
+      return colors.danger;
+    case "TENTATIVE":
+      return colors.warning;
+    default:
+      return colors.textMuted;
+  }
 }

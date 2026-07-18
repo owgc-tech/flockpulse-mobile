@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import type { RsvpStatus } from "@/src/features/events/types";
+import { getRsvpStatusColor } from "@/src/features/events/utils";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -11,10 +12,9 @@ function getThemedStyles(colors: ThemeColors) {
   return StyleSheet.create({
     currentLabel: { color: colors.textSecondary },
     readOnly: { backgroundColor: colors.cardBackground },
-    readOnlyText: { color: colors.text },
     buttonSecondary: { backgroundColor: colors.backgroundSecondary },
     buttonSecondaryText: { color: colors.text },
-    buttonAccent: { backgroundColor: colors.accent },
+    buttonAccent: { backgroundColor: colors.warning },
     label: { color: colors.text },
     input: { color: colors.text, borderColor: colors.border },
     error: { color: colors.danger },
@@ -39,7 +39,9 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   if (!editable) {
     return (
       <View style={[styles.readOnly, themed.readOnly]} testID="rsvp-readonly">
-        <Text style={[styles.readOnlyText, themed.readOnlyText]}>{readOnlyLabel}</Text>
+        <Text style={[styles.readOnlyText, { color: getRsvpStatusColor(colors, currentStatus) }]}>
+          {readOnlyLabel}
+        </Text>
       </View>
     );
   }
@@ -88,7 +90,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   return (
     <View style={styles.container}>
       {currentStatus ? (
-        <Text style={[styles.currentLabel, themed.currentLabel]}>
+        <Text style={[styles.currentLabel, { color: getRsvpStatusColor(colors, currentStatus) }]}>
           Current response:{" "}
           {currentStatus === "YES" ? "Going" : currentStatus === "TENTATIVE" ? "You might attend" : "Not going"}
         </Text>

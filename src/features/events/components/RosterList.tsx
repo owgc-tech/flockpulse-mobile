@@ -25,7 +25,7 @@ function getResponseColors(colors: ThemeColors): Record<RosterResponseValue, { c
   return {
     ACCEPTED: { color: colors.success },
     DECLINED: { color: colors.danger },
-    TENTATIVE: { color: colors.accent },
+    TENTATIVE: { color: colors.warning },
     NOT_RESPONDED: { color: colors.textMuted },
   };
 }

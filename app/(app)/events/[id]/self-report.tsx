@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { router, useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
 import { getEventById } from "@/src/features/events/services/events.service";
+import { getRsvpStatusColor } from "@/src/features/events/utils";
 import { ApiError } from "@/src/lib/api";
 import type { MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -21,7 +22,6 @@ function getThemedStyles(colors: ThemeColors) {
     name: { color: colors.text },
     meta: { color: colors.textSecondary },
     metaSecondary: { color: colors.textMuted },
-    rsvp: { color: colors.textSecondary },
     divider: { backgroundColor: colors.divider },
     sectionTitle: { color: colors.text },
     info: { color: colors.textSecondary },
@@ -152,7 +152,7 @@ export default function SelfReportScreen() {
       <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       <Text style={[styles.meta, themed.meta]}>{event.location_name}</Text>
       <Text style={[styles.metaSecondary, themed.metaSecondary]}>{event.location_address}</Text>
-      <Text style={[styles.rsvp, themed.rsvp]}>{rsvpLabel(event)}</Text>
+      <Text style={[styles.rsvp, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>{rsvpLabel(event)}</Text>
 
       <View style={[styles.divider, themed.divider]} />
 
