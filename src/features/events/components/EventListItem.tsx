@@ -95,7 +95,7 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
           otherwise stretch this Pressable to the full row width. */}
       <Pressable
         style={styles.locationPressable}
-        onPress={() => Linking.openURL(getMapUrl(event))}
+        onPress={async () => Linking.openURL(await getMapUrl(event))}
         testID={`event-item-map-${event.id}`}
       >
         <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>

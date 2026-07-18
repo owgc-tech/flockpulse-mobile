@@ -349,7 +349,7 @@ export default function EventDetailScreen() {
           stretch it to the full screen width. */}
       <Pressable
         style={styles.locationPressable}
-        onPress={() => Linking.openURL(getMapUrl(event))}
+        onPress={async () => Linking.openURL(await getMapUrl(event))}
         testID="event-detail-map"
       >
         <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
