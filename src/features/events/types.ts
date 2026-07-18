@@ -150,9 +150,7 @@ export interface PublishedEvent {
 }
 
 // PATCH /api/events/:id request body — confirmed live against
-// update_event_with_audit()'s JSONB patch handling. eventTypeId is
-// deliberately NOT a field here: the route handler doesn't destructure it
-// from the body at all, so event type is immutable after creation.
+// update_event_with_audit()'s JSONB patch handling.
 //
 // Every optional-on-the-wire field is typed `T | null` rather than `T |
 // undefined` and always sent (never omitted): the SQL uses a JSONB
@@ -162,6 +160,7 @@ export interface PublishedEvent {
 // save, not a sparse diff, so it always sends one or the other deliberately
 // rather than relying on JSON.stringify's undefined-drops-the-key behavior.
 export interface UpdateEventInput {
+  eventTypeId: string;
   name: string;
   startDatetime: string;
   endDatetime: string;
