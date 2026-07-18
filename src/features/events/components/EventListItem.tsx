@@ -116,7 +116,7 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
           </Text>
         </View>
         {event.rsvp_status ? (
-          <View style={[styles.pill, themed.pill]}>
+          <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
             <Text style={[styles.pillText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
               {RSVP_LABELS[event.rsvp_status]}
             </Text>
