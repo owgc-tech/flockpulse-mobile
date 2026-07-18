@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { getMapUrl, isRsvpWindowOpen } from "@/src/features/events/utils";
+import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -52,8 +52,7 @@ function getThemedStyles(colors: ThemeColors) {
     pillCancelled: { backgroundColor: colors.danger + "22" },
     pillText: { color: colors.accent },
     pillTextCancelled: { color: colors.danger },
-    rsvpText: { color: colors.textSecondary },
-    rsvpPromptText: { color: colors.accent },
+    rsvpPromptText: { color: colors.text, fontWeight: "700" },
   });
 }
 
@@ -93,7 +92,9 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
           </Text>
         </View>
         {event.rsvp_status ? (
-          <Text style={[styles.rsvpText, themed.rsvpText]}>{RSVP_LABELS[event.rsvp_status]}</Text>
+          <Text style={[styles.rsvpText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
+            {RSVP_LABELS[event.rsvp_status]}
+          </Text>
         ) : isRsvpWindowOpen(event) ? (
           // isRsvpWindowOpen already requires effective_status === "SCHEDULED",
           // so CANCELLED events (isCancelled above) never reach this branch —
