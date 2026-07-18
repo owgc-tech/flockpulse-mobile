@@ -14,7 +14,7 @@ function getThemedStyles(colors: ThemeColors) {
     readOnly: { backgroundColor: colors.cardBackground },
     buttonSecondary: { backgroundColor: colors.backgroundSecondary },
     buttonSecondaryText: { color: colors.text },
-    buttonAccent: { backgroundColor: colors.accent },
+    buttonAccent: { backgroundColor: colors.warning },
     label: { color: colors.text },
     input: { color: colors.text, borderColor: colors.border },
     error: { color: colors.danger },
