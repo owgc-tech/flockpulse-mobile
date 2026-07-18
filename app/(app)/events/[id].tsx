@@ -117,11 +117,11 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
 // (effective_status !== 'SCHEDULED'): distinguishes "hasn't opened yet" from
 // "already closed" rather than showing one generic message either way.
 function readOnlyRsvpLabel(event: ScreenEvent): string {
-  if (event.rsvp_status === "YES") return "You responded: Going";
+  if (event.rsvp_status === "YES") return "You responded: Accepted";
   if (event.rsvp_status === "NO") {
-    return event.rsvp_reason ? `You responded: Not going — ${event.rsvp_reason}` : "You responded: Not going";
+    return event.rsvp_reason ? `You responded: Declined — ${event.rsvp_reason}` : "You responded: Declined";
   }
-  if (event.rsvp_status === "TENTATIVE") return "You responded: Might attend";
+  if (event.rsvp_status === "TENTATIVE") return "You responded: Tentative";
   return event.effective_status === "DRAFT" ? "Not yet responded" : "RSVP closed";
 }
 
