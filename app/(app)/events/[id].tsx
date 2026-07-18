@@ -7,8 +7,10 @@ import {
   getEventById,
   getEventRoster,
   listMeetingResources,
+  listMyEvents,
   submitRsvp,
 } from "@/src/features/events/services/events.service";
+import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
@@ -416,7 +418,12 @@ export default function EventDetailScreen() {
 
       <View style={[styles.divider, themed.divider]} />
 
-      <RsvpSection event={event} onEventChange={setEvent} themed={themed} />
+      <RsvpSection
+        event={event}
+        onEventChange={setEvent}
+        setRosterRefreshTrigger={setRosterRefreshTrigger}
+        themed={themed}
+      />
 
       {showRoster ? (
         <>
@@ -431,10 +438,12 @@ export default function EventDetailScreen() {
 function RsvpSection({
   event,
   onEventChange,
+  setRosterRefreshTrigger,
   themed,
 }: {
   event: ScreenEvent;
   onEventChange: (event: ScreenEvent) => void;
+  setRosterRefreshTrigger: (updater: (t: number) => number) => void;
   themed: ReturnType<typeof getThemedStyles>;
 }) {
   const editable = isRsvpWindowOpen(event);
@@ -442,14 +451,20 @@ function RsvpSection({
   const handleSubmit = async (status: RsvpStatus, reason?: string) => {
     const response = await submitRsvp(event.id, status, reason);
     // Update local state so the screen reflects the new response
-    // immediately without a re-fetch (Grounding Check tradeoff: the list
-    // screen re-fetches on focus, so this only needs to stay correct for
-    // the current mount of this screen).
+    // immediately without a re-fetch. My Events list and this screen's own
+    // Roster section pick up the change via DIP-FP-151's mechanisms below —
+    // a fire-and-forget listMyEvents() feeding the module-level refresh
+    // signal for the list, and bumping rosterRefreshTrigger for the Roster
+    // section (both reused from Edit's/pull-to-refresh's existing paths).
     onEventChange({
       ...event,
       rsvp_status: response.rsvp_status,
       rsvp_reason: response.rsvp_reason,
     });
+    listMyEvents()
+      .then(notifyEventsRefreshed)
+      .catch((err) => console.warn("Failed to refresh events list after RSVP:", err));
+    setRosterRefreshTrigger((t) => t + 1);
   };
 
   return (
