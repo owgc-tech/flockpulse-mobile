@@ -3,7 +3,6 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { router, useLocalSearchParams } from "expo-router";
 import { submitSelfReport } from "@/src/features/self-reports/services/selfReports.service";
 import { getEventById } from "@/src/features/events/services/events.service";
-import { getRsvpStatusColor } from "@/src/features/events/utils";
 import { ApiError } from "@/src/lib/api";
 import type { MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -44,13 +43,6 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
   return `${dateLabel} · ${startTime} – ${endTime}`;
 }
 
-function rsvpLabel(event: MyEvent): string {
-  if (event.rsvp_status === "YES") return "Your RSVP: Going";
-  if (event.rsvp_status === "NO") return "Your RSVP: Not going";
-  if (event.rsvp_status === "TENTATIVE") return "Your RSVP: Might attend";
-  return "Your RSVP: No response";
-}
-
 type ViewState = "form" | "already-responded" | "submitted";
 
 export default function SelfReportScreen() {
@@ -76,8 +68,7 @@ export default function SelfReportScreen() {
   // event came from the notification's data payload at scheduling time and
   // can be stale (edited/cancelled since) — fresh-fetch on open and merge
   // over it, keeping the baked-in data only for the initial render so
-  // there's no blank flash. getEventById() lacks rsvp_status/rsvp_reason,
-  // so this can't clobber those fields.
+  // there's no blank flash.
   useEffect(() => {
     if (!params.id) return;
     getEventById(params.id)
@@ -152,7 +143,6 @@ export default function SelfReportScreen() {
       <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       <Text style={[styles.meta, themed.meta]}>{event.location_name}</Text>
       <Text style={[styles.metaSecondary, themed.metaSecondary]}>{event.location_address}</Text>
-      <Text style={[styles.rsvp, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>{rsvpLabel(event)}</Text>
 
       <View style={[styles.divider, themed.divider]} />
 
@@ -295,11 +285,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#777",
     marginTop: 2,
-  },
-  rsvp: {
-    fontSize: 14,
-    color: "#555",
-    marginTop: 8,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

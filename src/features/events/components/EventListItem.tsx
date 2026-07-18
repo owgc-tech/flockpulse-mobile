@@ -31,9 +31,9 @@ const STATUS_LABELS: Record<EffectiveEventStatus, string> = {
 };
 
 const RSVP_LABELS: Record<RsvpStatus, string> = {
-  YES: "You're going",
-  NO: "You declined",
-  TENTATIVE: "You might attend",
+  YES: "Accepted",
+  NO: "Declined",
+  TENTATIVE: "Tentative",
 };
 
 // Only the color-bearing keys from `styles` below, recomputed from the
@@ -53,7 +53,7 @@ function getThemedStyles(colors: ThemeColors) {
     pillCancelled: { backgroundColor: colors.danger + "22" },
     pillText: { color: colors.accent },
     pillTextCancelled: { color: colors.danger },
-    rsvpPromptText: { color: colors.text, fontWeight: "700" },
+    rsvpPromptText: { color: colors.accent, fontWeight: "700" },
   });
 }
 
@@ -116,9 +116,11 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
           </Text>
         </View>
         {event.rsvp_status ? (
-          <Text style={[styles.rsvpText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
-            {RSVP_LABELS[event.rsvp_status]}
-          </Text>
+          <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
+            <Text style={[styles.pillText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
+              {RSVP_LABELS[event.rsvp_status]}
+            </Text>
+          </View>
         ) : isRsvpWindowOpen(event) ? (
           // isRsvpWindowOpen already requires effective_status === "SCHEDULED",
           // so CANCELLED events (isCancelled above) never reach this branch —
