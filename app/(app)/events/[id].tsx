@@ -121,6 +121,7 @@ function readOnlyRsvpLabel(event: ScreenEvent): string {
   if (event.rsvp_status === "NO") {
     return event.rsvp_reason ? `You responded: Not going — ${event.rsvp_reason}` : "You responded: Not going";
   }
+  if (event.rsvp_status === "TENTATIVE") return "You responded: Might attend";
   return event.effective_status === "DRAFT" ? "Not yet responded" : "RSVP closed";
 }
 

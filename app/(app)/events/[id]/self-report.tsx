@@ -47,6 +47,7 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
 function rsvpLabel(event: MyEvent): string {
   if (event.rsvp_status === "YES") return "Your RSVP: Going";
   if (event.rsvp_status === "NO") return "Your RSVP: Not going";
+  if (event.rsvp_status === "TENTATIVE") return "Your RSVP: Might attend";
   return "Your RSVP: No response";
 }
 

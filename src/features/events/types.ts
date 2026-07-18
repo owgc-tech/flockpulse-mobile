@@ -8,7 +8,7 @@ export type EffectiveEventStatus =
   | "LOCKED"
   | "CANCELLED";
 
-export type RsvpStatus = "YES" | "NO";
+export type RsvpStatus = "YES" | "NO" | "TENTATIVE";
 
 export interface EventTargetSelector {
   group_ids?: string[];
@@ -81,7 +81,7 @@ export interface RsvpResponse {
   is_late: false;
 }
 
-export type RosterResponseValue = "ACCEPTED" | "DECLINED" | "NOT_RESPONDED";
+export type RosterResponseValue = "ACCEPTED" | "DECLINED" | "NOT_RESPONDED" | "TENTATIVE";
 
 // Matches flockpulse-web's RosterEntry (GET /api/events/:id/roster) exactly.
 export interface RosterEntry {

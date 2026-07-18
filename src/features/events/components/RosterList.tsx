@@ -11,6 +11,7 @@ interface RosterListProps {
 const RESPONSE_LABELS: Record<RosterResponseValue, string> = {
   ACCEPTED: "Accepted",
   DECLINED: "Declined",
+  TENTATIVE: "Tentative",
   NOT_RESPONDED: "No response yet",
 };
 
@@ -24,6 +25,7 @@ function getResponseColors(colors: ThemeColors): Record<RosterResponseValue, { c
   return {
     ACCEPTED: { color: colors.success },
     DECLINED: { color: colors.danger },
+    TENTATIVE: { color: colors.accent },
     NOT_RESPONDED: { color: colors.textMuted },
   };
 }

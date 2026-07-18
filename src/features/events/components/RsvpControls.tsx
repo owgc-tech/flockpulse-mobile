@@ -14,6 +14,7 @@ function getThemedStyles(colors: ThemeColors) {
     readOnlyText: { color: colors.text },
     buttonSecondary: { backgroundColor: colors.backgroundSecondary },
     buttonSecondaryText: { color: colors.text },
+    buttonAccent: { backgroundColor: colors.accent },
     label: { color: colors.text },
     input: { color: colors.text, borderColor: colors.border },
     error: { color: colors.danger },
@@ -33,7 +34,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   const [reason, setReason] = useState("");
   const [showReasonForm, setShowReasonForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<RsvpStatus | "NO_REASON" | null>(null);
 
   if (!editable) {
     return (
@@ -45,13 +46,25 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
 
   const handlePressYes = async () => {
     setError(null);
-    setIsSubmitting(true);
+    setSubmittingAction("YES");
     try {
       await onSubmit("YES");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
     } finally {
-      setIsSubmitting(false);
+      setSubmittingAction(null);
+    }
+  };
+
+  const handlePressTentative = async () => {
+    setError(null);
+    setSubmittingAction("TENTATIVE");
+    try {
+      await onSubmit("TENTATIVE");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
+    } finally {
+      setSubmittingAction(null);
     }
   };
 
@@ -61,14 +74,14 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
       return;
     }
     setError(null);
-    setIsSubmitting(true);
+    setSubmittingAction("NO_REASON");
     try {
       await onSubmit("NO", reason.trim());
       setShowReasonForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
     } finally {
-      setIsSubmitting(false);
+      setSubmittingAction(null);
     }
   };
 
@@ -76,7 +89,8 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
     <View style={styles.container}>
       {currentStatus ? (
         <Text style={[styles.currentLabel, themed.currentLabel]}>
-          Current response: {currentStatus === "YES" ? "Going" : "Not going"}
+          Current response:{" "}
+          {currentStatus === "YES" ? "Going" : currentStatus === "TENTATIVE" ? "You might attend" : "Not going"}
         </Text>
       ) : (
         <Text style={[styles.currentLabel, themed.currentLabel]}>You have not RSVPed</Text>
@@ -96,7 +110,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
             value={reason}
             onChangeText={setReason}
             multiline
-            editable={!isSubmitting}
+            editable={submittingAction === null}
             placeholderTextColor={colors.textMuted}
             testID="rsvp-reason-input"
           />
@@ -107,7 +121,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
                 setShowReasonForm(false);
                 setError(null);
               }}
-              disabled={isSubmitting}
+              disabled={submittingAction !== null}
               testID="rsvp-cancel-no"
             >
               <Text style={[styles.buttonSecondaryText, themed.buttonSecondaryText]}>Cancel</Text>
@@ -115,10 +129,10 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
             <Pressable
               style={[styles.button, styles.buttonDanger]}
               onPress={handleSubmitNo}
-              disabled={isSubmitting}
+              disabled={submittingAction !== null}
               testID="rsvp-submit-no"
             >
-              {isSubmitting ? (
+              {submittingAction === "NO_REASON" ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.buttonText}>Submit</Text>
@@ -131,22 +145,34 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
           <Pressable
             style={[styles.button, styles.buttonPrimary]}
             onPress={handlePressYes}
-            disabled={isSubmitting}
+            disabled={submittingAction !== null}
             testID="rsvp-yes"
           >
-            {isSubmitting ? (
+            {submittingAction === "YES" ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Yes, I&apos;ll be there</Text>
+              <Text style={styles.buttonText}>Accept</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.button, themed.buttonAccent]}
+            onPress={handlePressTentative}
+            disabled={submittingAction !== null}
+            testID="rsvp-tentative"
+          >
+            {submittingAction === "TENTATIVE" ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Tentative</Text>
             )}
           </Pressable>
           <Pressable
             style={[styles.button, styles.buttonDanger]}
             onPress={() => setShowReasonForm(true)}
-            disabled={isSubmitting}
+            disabled={submittingAction !== null}
             testID="rsvp-no"
           >
-            <Text style={styles.buttonText}>Can&apos;t make it</Text>
+            <Text style={styles.buttonText}>Decline</Text>
           </Pressable>
         </View>
       )}
