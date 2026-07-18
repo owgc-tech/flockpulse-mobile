@@ -63,6 +63,7 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
   // FP-66 AC: cancelled events stay in the list, still tappable, still
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
+  const isOnline = Boolean(event.online_meeting_resource_id || event.online_meeting_url);
 
   return (
     <Pressable
@@ -91,6 +92,11 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
+        {isOnline ? (
+          <View style={[styles.pill, themed.pill]}>
+            <Text style={[styles.pillText, themed.pillText]}>Online</Text>
+          </View>
+        ) : null}
         {event.rsvp_status ? (
           <Text style={[styles.rsvpText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
             {RSVP_LABELS[event.rsvp_status]}
