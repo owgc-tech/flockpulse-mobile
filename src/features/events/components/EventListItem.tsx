@@ -32,6 +32,7 @@ const STATUS_LABELS: Record<EffectiveEventStatus, string> = {
 const RSVP_LABELS: Record<RsvpStatus, string> = {
   YES: "You're going",
   NO: "You declined",
+  TENTATIVE: "You might attend",
 };
 
 // Only the color-bearing keys from `styles` below, recomputed from the

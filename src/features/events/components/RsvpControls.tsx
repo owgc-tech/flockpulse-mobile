@@ -14,6 +14,7 @@ function getThemedStyles(colors: ThemeColors) {
     readOnlyText: { color: colors.text },
     buttonSecondary: { backgroundColor: colors.backgroundSecondary },
     buttonSecondaryText: { color: colors.text },
+    buttonAccent: { backgroundColor: colors.accent },
     label: { color: colors.text },
     input: { color: colors.text, borderColor: colors.border },
     error: { color: colors.danger },
@@ -55,6 +56,18 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
     }
   };
 
+  const handlePressTentative = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await onSubmit("TENTATIVE");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmitNo = async () => {
     if (!reason.trim()) {
       setError("Please provide a reason.");
@@ -76,7 +89,8 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
     <View style={styles.container}>
       {currentStatus ? (
         <Text style={[styles.currentLabel, themed.currentLabel]}>
-          Current response: {currentStatus === "YES" ? "Going" : "Not going"}
+          Current response:{" "}
+          {currentStatus === "YES" ? "Going" : currentStatus === "TENTATIVE" ? "You might attend" : "Not going"}
         </Text>
       ) : (
         <Text style={[styles.currentLabel, themed.currentLabel]}>You have not RSVPed</Text>
@@ -138,6 +152,18 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.buttonText}>Yes, I&apos;ll be there</Text>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.button, themed.buttonAccent]}
+            onPress={handlePressTentative}
+            disabled={isSubmitting}
+            testID="rsvp-tentative"
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Maybe</Text>
             )}
           </Pressable>
           <Pressable
