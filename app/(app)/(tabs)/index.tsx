@@ -9,9 +9,10 @@ import {
   Text,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { listMeetingResources, listMyEvents } from "@/src/features/events/services/events.service";
+import { consumePendingEventsRefresh } from "@/src/features/events/eventListRefreshSignal";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
@@ -274,6 +275,21 @@ export default function MyEventsScreen() {
     ensureNotificationSetup();
     loadEvents(false);
   }, [loadEvents]);
+
+  // DIP-FP-151: distinct from the mount-only fetch above — this doesn't
+  // touch isLoading/isRefreshing or call loadEvents() at all, so casual tab
+  // switches stay silent with no blink and no network call. Edit/RSVP
+  // screens hand a freshly-fetched list to this module-level signal after
+  // the member's own change succeeds; consuming it here is just an in-memory
+  // check-and-clear, empty (null) unless something actually changed.
+  useFocusEffect(
+    useCallback(() => {
+      const fresh = consumePendingEventsRefresh();
+      if (fresh) {
+        setEvents(fresh);
+      }
+    }, [])
+  );
 
   const handlePressEvent = (event: MyEvent) => {
     router.push({

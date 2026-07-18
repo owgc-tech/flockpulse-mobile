@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { ApiError } from "@/src/lib/api";
 import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
+import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import {
   formationDisplayName,
@@ -518,6 +519,7 @@ export default function EditEventScreen() {
       // single-event array would wrongly cancel every other event's
       // reminders.
       const freshEvents = await listMyEvents();
+      notifyEventsRefreshed(freshEvents);
       reconcileEventReminders(freshEvents).catch((err) => console.warn("Failed to reconcile event reminders:", err));
       reconcileSelfReportReminders(freshEvents).catch((err) =>
         console.warn("Failed to reconcile self-report reminders:", err)
