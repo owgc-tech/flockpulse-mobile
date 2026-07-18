@@ -1,5 +1,3 @@
-export type ReminderOffset = "24h" | "1h";
-
 // Matches web's EventReminderFormation exactly (GET /api/events/:id/reminder-context).
 export interface EventReminderFormation {
   course_name: string;

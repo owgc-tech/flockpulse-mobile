@@ -1,5 +1,4 @@
 import type { MyEvent } from "@/src/features/events/types";
-import type { ReminderOffset } from "@/src/features/notifications/types";
 import {
   cancelReminderByIdentifier,
   getAllScheduledReminderIdentifiers,
@@ -10,21 +9,23 @@ import {
   buildReminderContent,
   fetchReminderContext,
 } from "@/src/features/notifications/services/reminderContent.service";
+import {
+  getReminderOffsetHours,
+  type ReminderOffsetHours,
+} from "@/src/features/notifications/services/reminderSettings.service";
 
-const OFFSET_MS: Record<ReminderOffset, number> = {
-  "24h": 24 * 60 * 60 * 1000,
-  "1h": 60 * 60 * 1000,
-};
+const HOURS_MS = 60 * 60 * 1000;
 
 interface PendingReminder {
   event: MyEvent;
-  offset: ReminderOffset;
+  hours: number;
   fireDate: Date;
 }
 
-function computePendingReminders(events: MyEvent[]): PendingReminder[] {
+function computePendingReminders(events: MyEvent[], offsetHours: ReminderOffsetHours): PendingReminder[] {
   const now = Date.now();
   const pending: PendingReminder[] = [];
+  const hoursList = [offsetHours.slot1Hours, offsetHours.slot2Hours];
 
   for (const event of events) {
     // Declined events are excluded; not-responded and accepted are both
@@ -35,10 +36,10 @@ function computePendingReminders(events: MyEvent[]): PendingReminder[] {
     }
 
     const startMs = new Date(event.start_datetime).getTime();
-    (Object.keys(OFFSET_MS) as ReminderOffset[]).forEach((offset) => {
-      const fireMs = startMs - OFFSET_MS[offset];
+    hoursList.forEach((hours) => {
+      const fireMs = startMs - hours * HOURS_MS;
       if (fireMs > now) {
-        pending.push({ event, offset, fireDate: new Date(fireMs) });
+        pending.push({ event, hours, fireDate: new Date(fireMs) });
       }
     });
   }
@@ -53,8 +54,9 @@ function computePendingReminders(events: MyEvent[]): PendingReminder[] {
 // mechanism to rewrite already-scheduled local notification content at the
 // literal instant of delivery (see DIP Grounding Check).
 export async function reconcileEventReminders(events: MyEvent[]): Promise<void> {
-  const pending = computePendingReminders(events);
-  const pendingIdentifiers = new Set(pending.map((p) => reminderIdentifier(p.event.id, p.offset)));
+  const offsetHours = await getReminderOffsetHours();
+  const pending = computePendingReminders(events, offsetHours);
+  const pendingIdentifiers = new Set(pending.map((p) => reminderIdentifier(p.event.id, p.hours)));
 
   const scheduledIdentifiers = await getAllScheduledReminderIdentifiers();
   const toCancel = scheduledIdentifiers.filter((id) => !pendingIdentifiers.has(id));
@@ -62,10 +64,10 @@ export async function reconcileEventReminders(events: MyEvent[]): Promise<void> 
   await Promise.all(toCancel.map((identifier) => cancelReminderByIdentifier(identifier)));
 
   await Promise.all(
-    pending.map(async ({ event, offset, fireDate }) => {
+    pending.map(async ({ event, hours, fireDate }) => {
       const context = await fetchReminderContext(event.id);
       const { title, body } = buildReminderContent(context);
-      await scheduleReminder(event, offset, fireDate, title, body);
+      await scheduleReminder(event, hours, fireDate, title, body);
     })
   );
 }
