@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { ApiError } from "@/src/lib/api";
 import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
+import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import {
   formationDisplayName,
   listCourses,
@@ -29,6 +30,7 @@ import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupP
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
 import type { EventDetail, MeetingResource } from "@/src/features/events/types";
+import type { EventType } from "@/src/features/event-types/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -349,6 +351,8 @@ export default function EditEventScreen() {
   const initialEvent = JSON.parse(params.event ?? "{}") as EventDetail;
 
   const [name, setName] = useState(initialEvent.name ?? "");
+  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
+  const [eventTypeId, setEventTypeId] = useState<string | null>(initialEvent.event_type_id ?? null);
   const [startDatetime, setStartDatetime] = useState<Date | null>(
     initialEvent.start_datetime ? new Date(initialEvent.start_datetime) : null
   );
@@ -410,6 +414,16 @@ export default function EditEventScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    listEventTypes()
+      .then(setEventTypes)
+      .catch(() => {
+        // Left as an empty list rather than blocking the form — the picker
+        // simply renders no options if this fails, same non-fatal handling
+        // as create.tsx.
+      });
+  }, []);
+
+  useEffect(() => {
     if (!initialEvent.online_meeting_resource_id) return;
     listMeetingResources()
       .then((resources) => {
@@ -452,7 +466,14 @@ export default function EditEventScreen() {
   const handleSubmit = async () => {
     setError(null);
 
-    if (!name.trim() || !startDatetime || !endDatetime || !locationName.trim() || !locationAddress.trim()) {
+    if (
+      !name.trim() ||
+      !eventTypeId ||
+      !startDatetime ||
+      !endDatetime ||
+      !locationName.trim() ||
+      !locationAddress.trim()
+    ) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -468,6 +489,7 @@ export default function EditEventScreen() {
       // key-presence check, not a truthiness check, so this is a full-form
       // submission, not a sparse diff. See UpdateEventInput's doc comment.
       await updateEvent(params.id, {
+        eventTypeId,
         name: name.trim(),
         startDatetime: startDatetime.toISOString(),
         endDatetime: endDatetime.toISOString(),
@@ -536,9 +558,26 @@ export default function EditEventScreen() {
         testID="edit-event-name"
       />
 
-      {/* No Event Type field: confirmed against the PATCH route handler
-          that eventTypeId is never destructured from the request body — it
-          is immutable once the event is created. */}
+      <Text style={[styles.label, themed.label]}>Event Type</Text>
+      <View style={styles.optionsRow}>
+        {eventTypes.map((type) => (
+          <Pressable
+            key={type.id}
+            style={[
+              styles.optionButton,
+              themed.optionButton,
+              eventTypeId === type.id && [styles.optionButtonSelected, themed.optionButtonSelected],
+            ]}
+            onPress={() => setEventTypeId(type.id)}
+            disabled={isSubmitting}
+            testID={`edit-event-type-${type.id}`}
+          >
+            <Text style={[styles.optionText, themed.optionText, eventTypeId === type.id && styles.optionTextSelected]}>
+              {type.name}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Text style={[styles.label, themed.label]}>Start</Text>
       <Pressable
