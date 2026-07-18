@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
-import { listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { submitSelfReport, listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
 import type { PendingSelfReportRow } from "@/src/features/self-reports/types";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
-import type { MyEvent } from "@/src/features/events/types";
+import { ApiError } from "@/src/lib/api";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
+
+const STAR_VALUES = [1, 2, 3, 4, 5];
 
 // Only the color-bearing keys from `styles` below, recomputed from the
 // current theme at render time — everything structural stays in the static
@@ -18,6 +19,12 @@ function getThemedStyles(colors: ThemeColors) {
     card: { backgroundColor: colors.cardBackground },
     eventName: { color: colors.text },
     meta: { color: colors.textSecondary },
+    label: { color: colors.text },
+    input: { borderColor: colors.border, color: colors.text },
+    buttonNeutral: { backgroundColor: colors.backgroundSecondary },
+    buttonSelected: { backgroundColor: colors.accent },
+    buttonText: { color: colors.text },
+    submitButton: { backgroundColor: colors.success },
     error: { color: colors.danger },
   });
 }
@@ -29,44 +36,6 @@ function formatEventRange(startIso: string, endIso: string): string {
   const startTime = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const endTime = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   return `${dateLabel}, ${startTime} – ${endTime}`;
-}
-
-// DIP-FP-119-mobile: events/[id]/self-report.tsx (reused as-is) expects a
-// full MyEvent-shaped `event` route param — event.id specifically drives
-// the actual submitSelfReport(event.id, ...) call, so that mapping is load-
-// bearing. The fields below beyond id/name/start_datetime/end_datetime/
-// location_name are display-only placeholders: by the time an event is
-// COMPLETED it has already dropped out of /api/events/mine (which is where
-// rsvp_status/status/etc. would normally come from), so there is no live
-// source for them here. rsvp_status: null just shows "No response" on that
-// screen's RSVP label — cosmetic only, not used by submission logic.
-function toRouteEvent(item: PendingSelfReportRow): MyEvent {
-  return {
-    id: item.event_id,
-    name: item.event_name,
-    status: "SCHEDULED",
-    start_datetime: item.event_start_datetime,
-    end_datetime: item.event_end_datetime,
-    location_name: item.event_location_name,
-    location_address: "",
-    location_url: null,
-    online_meeting_resource_id: null,
-    online_meeting_url: null,
-    online_meeting_platform_label: null,
-    target: {},
-    event_type_id: "",
-    prayer_leader_member_id: null,
-    food_assignment: null,
-    created_at: "",
-    effective_status: "COMPLETED",
-    rsvp_status: null,
-    rsvp_reason: null,
-    // Same cosmetic-placeholder reasoning as created_at/location_address
-    // above — self-report.tsx never reads rsvp_closure_at (event is already
-    // COMPLETED, so isRsvpWindowOpen's effective_status check is false
-    // regardless of this value).
-    rsvp_closure_at: "",
-  };
 }
 
 export default function SelfReportTabScreen() {
@@ -103,10 +72,14 @@ export default function SelfReportTabScreen() {
     load();
   }, [load]);
 
-  const handlePress = (item: PendingSelfReportRow) => {
-    router.push({
-      pathname: "/(app)/events/[id]/self-report",
-      params: { id: item.event_id, event: JSON.stringify(toRouteEvent(item)) },
+  // DIP-FP-152: mirrors Confirmation's exact pattern (confirmations/index.tsx
+  // handleDecision) — instant local removal plus an immediate badge resync,
+  // no re-fetch needed, called right after a successful submission rather
+  // than only on manual pull-refresh.
+  const handleSubmitted = (eventId: string) => {
+    setItems((prev) => prev.filter((i) => i.event_id !== eventId));
+    syncSelfReportBadge().catch((err) => {
+      console.warn("Failed to sync self-report badge:", err);
     });
   };
 
@@ -132,18 +105,167 @@ export default function SelfReportTabScreen() {
             </View>
           }
           renderItem={({ item }) => (
-            <Pressable
-              style={[styles.card, themed.card]}
-              onPress={() => handlePress(item)}
-              testID={`self-report-item-${item.event_id}`}
-            >
-              <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
-              <Text style={[styles.meta, themed.meta]}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
-              <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
-            </Pressable>
+            <SelfReportItem item={item} onSubmitted={() => handleSubmitted(item.event_id)} themed={themed} />
           )}
         />
       )}
+    </View>
+  );
+}
+
+// DIP-FP-152: mirrors ConfirmationItem's per-item submitting/error state
+// structurally, but the decision itself is NOT single-tap immediate-submit
+// like Confirmation's Confirm/Reject — Attended/Did Not Attend are selection
+// toggles that reveal fields (Rating/Feedback, or a required Reason) behind
+// a separate Submit button, same two-step flow the retired standalone screen
+// (events/[id]/self-report.tsx) already had, just embedded on the card.
+function SelfReportItem({
+  item,
+  onSubmitted,
+  themed,
+}: {
+  item: PendingSelfReportRow;
+  onSubmitted: () => void;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  const colors = useThemeColors();
+  const [attended, setAttended] = useState<boolean | null>(null);
+  const [reason, setReason] = useState("");
+  const [starRating, setStarRating] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (attended === null) return;
+    if (!attended && !reason.trim()) {
+      setError("Please provide a reason.");
+      return;
+    }
+
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await submitSelfReport(
+        item.event_id,
+        attended ? "SELF_REPORTED_YES" : "SELF_REPORTED_NO",
+        attended
+          ? { feedback: feedback.trim() || undefined, starRating: starRating ?? undefined }
+          : { reason: reason.trim() }
+      );
+      onSubmitted();
+    } catch (err) {
+      // No proactive "already self-reported" check — attempt submission and
+      // handle the existing error code gracefully, same precedent as the
+      // retired standalone screen: treated as a soft-success (the card is
+      // gone either way, since it's already resolved server-side), not a
+      // hard error left on-screen.
+      if (err instanceof ApiError && err.code === "SELF_REPORT_ALREADY_SUBMITTED") {
+        onSubmitted();
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to submit self-report.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View style={[styles.card, themed.card]} testID={`self-report-item-${item.event_id}`}>
+      <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
+      <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
+
+      <Text style={[styles.label, themed.label, styles.sectionLabel]}>Did you attend?</Text>
+      <View style={styles.row}>
+        <Pressable
+          style={[
+            styles.button,
+            styles.buttonNeutral,
+            themed.buttonNeutral,
+            attended === true && [styles.buttonSelected, themed.buttonSelected],
+          ]}
+          onPress={() => setAttended(true)}
+          disabled={isSubmitting}
+          testID={`self-report-attended-${item.event_id}`}
+        >
+          <Text style={[styles.buttonText, themed.buttonText, attended === true && styles.buttonTextSelected]}>
+            Attended
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.button,
+            styles.buttonNeutral,
+            themed.buttonNeutral,
+            attended === false && [styles.buttonSelected, themed.buttonSelected],
+          ]}
+          onPress={() => setAttended(false)}
+          disabled={isSubmitting}
+          testID={`self-report-not-attended-${item.event_id}`}
+        >
+          <Text style={[styles.buttonText, themed.buttonText, attended === false && styles.buttonTextSelected]}>
+            Did Not Attend
+          </Text>
+        </Pressable>
+      </View>
+
+      {attended === true ? (
+        <View style={styles.formSection}>
+          <Text style={[styles.label, themed.label]}>Rating</Text>
+          <View style={styles.starsRow}>
+            {STAR_VALUES.map((value) => (
+              <Pressable
+                key={value}
+                onPress={() => setStarRating(value)}
+                disabled={isSubmitting}
+                testID={`self-report-star-${value}-${item.event_id}`}
+              >
+                <Text style={styles.star}>{starRating !== null && value <= starRating ? "★" : "☆"}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={[styles.label, themed.label]}>Feedback (optional)</Text>
+          <TextInput
+            style={[styles.input, themed.input]}
+            value={feedback}
+            onChangeText={(text) => setFeedback(text.slice(0, 1000))}
+            multiline
+            editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
+            testID={`self-report-feedback-input-${item.event_id}`}
+          />
+        </View>
+      ) : attended === false ? (
+        <View style={styles.formSection}>
+          <Text style={[styles.label, themed.label]}>Reason</Text>
+          <TextInput
+            style={[styles.input, themed.input]}
+            value={reason}
+            onChangeText={setReason}
+            multiline
+            editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
+            testID={`self-report-reason-input-${item.event_id}`}
+          />
+        </View>
+      ) : null}
+
+      {error ? (
+        <Text style={[styles.error, themed.error]} testID={`self-report-error-${item.event_id}`}>
+          {error}
+        </Text>
+      ) : null}
+
+      <Pressable
+        style={[styles.submitButton, themed.submitButton, attended === null && styles.buttonDisabled]}
+        onPress={handleSubmit}
+        disabled={isSubmitting || attended === null}
+        testID={`self-report-submit-${item.event_id}`}
+      >
+        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={[styles.buttonText, styles.buttonTextSelected]}>Submit</Text>}
+      </Pressable>
     </View>
   );
 }
@@ -182,6 +304,70 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#555",
     marginTop: 2,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  sectionLabel: {
+    marginTop: 12,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  formSection: {
+    marginTop: 12,
+  },
+  starsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 16,
+  },
+  star: {
+    fontSize: 32,
+    color: "#f59e0b",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  button: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  buttonNeutral: {
+    backgroundColor: "#e5e7eb",
+  },
+  buttonSelected: {
+    backgroundColor: "#2563eb",
+  },
+  submitButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#16a34a",
+    marginTop: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonText: {
+    color: "#374151",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  buttonTextSelected: {
+    color: "#fff",
   },
   error: {
     color: "#c0392b",

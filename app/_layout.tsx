@@ -26,15 +26,17 @@ function navigateFromNotification(response: Notifications.NotificationResponse) 
     return;
   }
 
-  if (!data.eventId || !data.event) return;
-
   if (type === "self-report") {
-    router.push({
-      pathname: "/(app)/events/[id]/self-report",
-      params: { id: data.eventId, event: data.event },
-    });
+    // DIP-FP-152: mirrors the confirmation handler above exactly — the
+    // standalone events/[id]/self-report screen this used to deep-link into
+    // is retired, so this routes to the Self-Report tab instead, which
+    // queries GET /api/self-reports/pending fresh itself. No event-specific
+    // params needed.
+    router.push("/(app)/(tabs)/self-report");
     return;
   }
+
+  if (!data.eventId || !data.event) return;
 
   router.push({
     pathname: "/(app)/events/[id]",

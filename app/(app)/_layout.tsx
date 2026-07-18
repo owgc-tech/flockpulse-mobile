@@ -171,8 +171,10 @@ export default function AppLayout() {
 
   // A Stack wrapping the (tabs) group (My Events / Confirmations) plus
   // every screen that should push over the tab bar and hide it: event
-  // detail, self-report, edit event, create event, and the profile edit
-  // form. The Profile Card itself is no longer a route — Avatar.tsx now
+  // detail, edit event, create event, and the profile edit form. The
+  // standalone self-report screen used to be registered here too —
+  // retired under DIP-FP-152 in favor of inline cards on the Self-Report
+  // tab itself. The Profile Card itself is no longer a route — Avatar.tsx now
   // renders it as a positioned popover (a Modal) owned by the avatar
   // component, not something registered here. Not a change to the gate
   // above — only what renders once it says "ready".
@@ -202,7 +204,6 @@ export default function AppLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="events/[id]" />
-        <Stack.Screen name="events/[id]/self-report" />
         <Stack.Screen name="events/[id]/edit" />
         <Stack.Screen name="events/create" />
         <Stack.Screen name="profile/edit" />
