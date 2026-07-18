@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import type { MyEvent } from "@/src/features/events/types";
-import type { NotificationDataPayload, ReminderOffset } from "@/src/features/notifications/types";
+import type { NotificationDataPayload } from "@/src/features/notifications/types";
 
 const REMINDER_PREFIX = "reminder-";
 // DIP-FP-132-FP-133-FP-134
@@ -16,8 +16,8 @@ let handlerConfigured = false;
 // Exported so reminders.service.ts can compute the "should be scheduled"
 // identifier set with the exact same format used when actually scheduling —
 // one source of truth for the identifier shape.
-export function reminderIdentifier(eventId: string, offset: ReminderOffset): string {
-  return `${REMINDER_PREFIX}${eventId}-${offset}`;
+export function reminderIdentifier(eventId: string, hours: number): string {
+  return `${REMINDER_PREFIX}${eventId}-${hours}h`;
 }
 
 // Called once (events list screen mount). Requests permission if not already
@@ -52,7 +52,7 @@ export async function ensureNotificationSetup(): Promise<void> {
 
 export async function scheduleReminder(
   event: MyEvent,
-  offset: ReminderOffset,
+  hours: number,
   fireDate: Date,
   title: string,
   body: string
@@ -64,7 +64,7 @@ export async function scheduleReminder(
     // replaces the existing request rather than duplicating it (standard
     // expo-notifications behavior) — this is what keeps reconciliation
     // idempotent across repeated app opens.
-    identifier: reminderIdentifier(event.id, offset),
+    identifier: reminderIdentifier(event.id, hours),
     content: { title, body, data: data as unknown as Record<string, unknown> },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
@@ -74,8 +74,8 @@ export async function scheduleReminder(
   });
 }
 
-export async function cancelReminder(eventId: string, offset: ReminderOffset): Promise<void> {
-  await Notifications.cancelScheduledNotificationAsync(reminderIdentifier(eventId, offset));
+export async function cancelReminder(eventId: string, hours: number): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(reminderIdentifier(eventId, hours));
 }
 
 export async function cancelReminderByIdentifier(identifier: string): Promise<void> {
@@ -91,8 +91,8 @@ export async function getAllScheduledReminderIdentifiers(): Promise<string[]> {
 // tenant-configured day-offsets before rsvp_closure_at. Same deterministic-
 // identifier/reconciliation model as reminders above, kept as separate
 // prefixed functions (rather than generalizing reminderIdentifier/
-// scheduleReminder) since nudges key off offsetDays (a plain number), not
-// the fixed ReminderOffset union reminders use.
+// scheduleReminder) since nudges key off days before rsvp_closure_at, a
+// different anchor point than reminders' hours-before-start_datetime.
 export function nudgeIdentifier(eventId: string, offsetDays: number): string {
   return `${NUDGE_PREFIX}${eventId}-${offsetDays}`;
 }

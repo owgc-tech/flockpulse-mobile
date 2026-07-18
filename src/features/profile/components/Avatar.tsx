@@ -97,6 +97,11 @@ export function Avatar() {
     router.push("/(app)/profile/edit");
   };
 
+  const handlePreferences = () => {
+    setIsOpen(false);
+    router.push("/(app)/preferences");
+  };
+
   const handleSignOut = async () => {
     setIsOpen(false);
     await signOut();
@@ -151,9 +156,15 @@ export function Avatar() {
                 <Text style={styles.editButtonText}>Edit Profile</Text>
               </Pressable>
 
-              <Pressable onPress={handleSignOut} style={styles.signOutLink} testID="sign-out">
-                <Text style={[styles.signOutText, themed.signOutText]}>Sign Out</Text>
-              </Pressable>
+              <View style={styles.secondaryActionsRow}>
+                <Pressable onPress={handlePreferences} testID="preferences-link">
+                  <Text style={[styles.signOutText, themed.signOutText]}>Preferences</Text>
+                </Pressable>
+
+                <Pressable onPress={handleSignOut} testID="sign-out">
+                  <Text style={[styles.signOutText, themed.signOutText]}>Sign Out</Text>
+                </Pressable>
+              </View>
             </>
           )}
         </View>
@@ -252,8 +263,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-  signOutLink: {
-    alignSelf: "flex-end",
+  secondaryActionsRow: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    justifyContent: "space-between",
     marginTop: 12,
   },
   signOutText: {

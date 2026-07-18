@@ -206,6 +206,7 @@ export default function AppLayout() {
         <Stack.Screen name="events/[id]/edit" />
         <Stack.Screen name="events/create" />
         <Stack.Screen name="profile/edit" />
+        <Stack.Screen name="preferences" />
       </Stack>
     </View>
   );
