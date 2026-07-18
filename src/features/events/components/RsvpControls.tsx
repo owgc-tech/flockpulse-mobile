@@ -92,7 +92,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
       {currentStatus ? (
         <Text style={[styles.currentLabel, { color: getRsvpStatusColor(colors, currentStatus) }]}>
           Current response:{" "}
-          {currentStatus === "YES" ? "Going" : currentStatus === "TENTATIVE" ? "You might attend" : "Not going"}
+          {currentStatus === "YES" ? "Accepted" : currentStatus === "TENTATIVE" ? "Tentative" : "Declined"}
         </Text>
       ) : (
         <Text style={[styles.currentLabel, themed.currentLabel]}>You have not RSVPed</Text>
