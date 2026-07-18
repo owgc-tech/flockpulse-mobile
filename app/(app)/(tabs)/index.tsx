@@ -11,14 +11,14 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { listMyEvents } from "@/src/features/events/services/events.service";
+import { listMeetingResources, listMyEvents } from "@/src/features/events/services/events.service";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
-import type { MyEvent } from "@/src/features/events/types";
+import type { MeetingResource, MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -55,12 +55,14 @@ function EventRow({
   onLayout,
   themedDayOfWeek,
   themedDateNumber,
+  meetingResources,
 }: {
   event: MyEvent;
   onPress: () => void;
   onLayout: (height: number) => void;
   themedDayOfWeek: { color: string };
   themedDateNumber: { color: string };
+  meetingResources: MeetingResource[];
 }) {
   const start = new Date(event.start_datetime);
   const dayOfWeek = start.toLocaleDateString(undefined, { weekday: "short" });
@@ -73,7 +75,7 @@ function EventRow({
         <Text style={[styles.dateNumber, themedDateNumber]}>{dateNumber}</Text>
       </View>
       <View style={styles.eventColumn}>
-        <EventListItem event={event} onPress={onPress} />
+        <EventListItem event={event} onPress={onPress} meetingResources={meetingResources} />
       </View>
     </View>
   );
@@ -129,6 +131,7 @@ export default function MyEventsScreen() {
     && session.user.app_metadata.role !== "MEMBER";
 
   const [events, setEvents] = useState<MyEvent[]>([]);
+  const [meetingResources, setMeetingResources] = useState<MeetingResource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,8 +225,24 @@ export default function MyEventsScreen() {
     }
     setError(null);
     try {
-      const data = await listMyEvents();
+      // Meeting resources feed the online-meeting link's label/join_url
+      // (mirrors [id].tsx's resolution) but aren't core to the list itself —
+      // allSettled so a resource-lookup failure can't blank the whole
+      // events list, same defensive reasoning as [id].tsx's own lookups.
+      const [eventsResult, resourcesResult] = await Promise.allSettled([
+        listMyEvents(),
+        listMeetingResources(),
+      ]);
+      if (eventsResult.status === "rejected") {
+        throw eventsResult.reason;
+      }
+      const data = eventsResult.value;
       setEvents(data);
+      if (resourcesResult.status === "fulfilled") {
+        setMeetingResources(resourcesResult.value);
+      } else {
+        console.warn("Failed to fetch meeting resources:", resourcesResult.reason);
+      }
       // Reminder scheduling is a background enhancement, not core to
       // rendering the list — a failure here (e.g. one event's
       // reminder-context fetch failing) shouldn't surface as a blocking
@@ -399,6 +418,7 @@ export default function MyEventsScreen() {
               onLayout={(height) => handleRowLayout(item.id, height)}
               themedDayOfWeek={themed.dayOfWeek}
               themedDateNumber={themed.dateNumber}
+              meetingResources={meetingResources}
             />
           )}
         />

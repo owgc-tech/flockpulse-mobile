@@ -1,13 +1,14 @@
 import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
-import type { EffectiveEventStatus, MyEvent, RsvpStatus } from "@/src/features/events/types";
+import type { EffectiveEventStatus, MeetingResource, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
 interface EventListItemProps {
   event: MyEvent;
   onPress: () => void;
+  meetingResources: MeetingResource[];
 }
 
 function formatDateTime(iso: string): string {
@@ -56,14 +57,27 @@ function getThemedStyles(colors: ThemeColors) {
   });
 }
 
-export function EventListItem({ event, onPress }: EventListItemProps) {
+export function EventListItem({ event, onPress, meetingResources }: EventListItemProps) {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
 
   // FP-66 AC: cancelled events stay in the list, still tappable, still
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
-  const isOnline = Boolean(event.online_meeting_resource_id || event.online_meeting_url);
+
+  // Mirrors app/(app)/events/[id].tsx exactly: resource-booked meetings
+  // resolve their join link/label from the tracked resource (matched by id
+  // out of the full list passed down from the list screen); freeform-
+  // platform meetings already carry both directly on the event.
+  const meetingResource = event.online_meeting_resource_id
+    ? meetingResources.find((r) => r.id === event.online_meeting_resource_id) ?? null
+    : null;
+  const onlineMeetingLink = event.online_meeting_resource_id
+    ? (meetingResource?.join_url ?? null)
+    : event.online_meeting_url;
+  const onlineMeetingLabel = event.online_meeting_resource_id
+    ? `Zoom: ${meetingResource?.name ?? "Join Meeting"}`
+    : event.online_meeting_platform_label || "Join Meeting";
 
   return (
     <Pressable
@@ -86,17 +100,21 @@ export function EventListItem({ event, onPress }: EventListItemProps) {
       >
         <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
       </Pressable>
+      {onlineMeetingLink ? (
+        <Pressable
+          style={styles.locationPressable}
+          onPress={() => Linking.openURL(onlineMeetingLink)}
+          testID={`event-item-online-meeting-${event.id}`}
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{onlineMeetingLabel}</Text>
+        </Pressable>
+      ) : null}
       <View style={styles.footer}>
         <View style={[styles.pill, themed.pill, isCancelled && [styles.pillCancelled, themed.pillCancelled]]}>
           <Text style={[styles.pillText, themed.pillText, isCancelled && [styles.pillTextCancelled, themed.pillTextCancelled]]}>
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
-        {isOnline ? (
-          <View style={[styles.pill, themed.pill]}>
-            <Text style={[styles.pillText, themed.pillText]}>Online</Text>
-          </View>
-        ) : null}
         {event.rsvp_status ? (
           <Text style={[styles.rsvpText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
             {RSVP_LABELS[event.rsvp_status]}
