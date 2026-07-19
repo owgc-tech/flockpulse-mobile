@@ -6,10 +6,9 @@ import { syncConfirmationBadge } from "@/src/features/notifications/services/con
 import { useConfirmationBadgeCount } from "@/src/features/notifications/hooks/useConfirmationBadgeCount";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
 import { useSelfReportBadgeCount } from "@/src/features/notifications/hooks/useSelfReportBadgeCount";
-import { useThemeColors } from "@/src/theme/useThemeColors";
+import { AnimatedTabBar } from "@/src/features/navigation/AnimatedTabBar";
 
 export default function TabsLayout() {
-  const colors = useThemeColors();
   const { session } = useSession();
   const role = session?.user.app_metadata?.role;
   const showConfirmations = role !== undefined && role !== "MEMBER";
@@ -67,13 +66,18 @@ export default function TabsLayout() {
   // Stack/Tabs tree in (app)/_layout.tsx, not per-tab. tabBarLabel/
   // tabBarBadge/href below are untouched — those control the bottom tab
   // bar, which headerShown doesn't affect.
+  //
+  // DIP-FP-155: tabBar hands rendering entirely to AnimatedTabBar, which
+  // reads tabBarLabel/tabBarBadge/href (via tabBarItemStyle) itself from
+  // each screen's descriptor options below — so tabBarStyle/
+  // tabBarActiveTintColor/tabBarInactiveTintColor (the default renderer's
+  // own styling hooks) are now redundant and removed; the custom tab bar
+  // owns all of that.
   return (
     <Tabs
+      tabBar={(props) => <AnimatedTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: colors.background, borderTopColor: colors.border },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
       }}
     >
       <Tabs.Screen name="index" options={{ tabBarLabel: "My Events" }} />
