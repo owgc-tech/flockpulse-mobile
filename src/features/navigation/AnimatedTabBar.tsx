@@ -95,7 +95,16 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
   }, [activeEntry?.route.key]);
 
   return (
-    <View style={[styles.wrapper, { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
+    // DIP-FP-155-adj-1: the dark-mode gap wasn't the oval (container, using
+    // colors.cardBackground, already correct) — it was this wrapper. Nothing
+    // above it in the tree sets a background either (BottomTabView.js wraps
+    // a custom tabBar with none; app/(app)/_layout.tsx's appShell is bare
+    // flex:1; app/_layout.tsx has no styling at all) — confirmed live
+    // against those sources. With no color of its own, this transparent
+    // padding/safe-area strip fell through to the native root view's
+    // default background (white), which only coincidentally matched light
+    // mode's own background color.
+    <View style={[styles.wrapper, { backgroundColor: colors.background, paddingBottom: insets.bottom > 0 ? insets.bottom : 12 }]}>
       <View style={[styles.container, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
         <Animated.View
           pointerEvents="none"
@@ -174,22 +183,30 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
 }
 
 const styles = StyleSheet.create({
+  // DIP-FP-155-adj-1: "sits too high" per Joseph's device testing — made the
+  // bar itself more compact (less dead space above the oval, thinner oval)
+  // so the whole thing sits lower and reads as a proper bottom bar rather
+  // than floating mid-screen. paddingBottom (set inline above, from
+  // insets.bottom) is deliberately untouched here — that value IS the home
+  // indicator's safe clearance, not an arbitrary gap; reducing it below the
+  // OS-reported inset would risk exactly the collision this DIP warns
+  // against, and that's not something verifiable without a real device.
   wrapper: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
   },
   container: {
     flexDirection: "row",
     borderRadius: 999,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 6,
     overflow: "hidden",
   },
   highlight: {
     position: "absolute",
-    top: 4,
-    bottom: 4,
+    top: 3,
+    bottom: 3,
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -200,7 +217,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 4,
+    paddingVertical: 2,
     gap: 2,
   },
   label: {
