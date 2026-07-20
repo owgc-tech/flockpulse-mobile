@@ -6,6 +6,8 @@ import { syncConfirmationBadge } from "@/src/features/notifications/services/con
 import { useConfirmationBadgeCount } from "@/src/features/notifications/hooks/useConfirmationBadgeCount";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
 import { useSelfReportBadgeCount } from "@/src/features/notifications/hooks/useSelfReportBadgeCount";
+import { syncMyTasksBadge } from "@/src/features/notifications/services/myTasksBadge.service";
+import { useMyTasksBadgeCount } from "@/src/features/notifications/hooks/useMyTasksBadgeCount";
 import { AnimatedTabBar } from "@/src/features/navigation/AnimatedTabBar";
 
 export default function TabsLayout() {
@@ -15,6 +17,7 @@ export default function TabsLayout() {
 
   const pendingCount = useConfirmationBadgeCount();
   const pendingSelfReportCount = useSelfReportBadgeCount();
+  const pendingMyTasksCount = useMyTasksBadgeCount();
 
   // FP-99: syncs both the OS app icon badge and (via the shared store
   // useConfirmationBadgeCount exposes) this tab's own badge — on mount and
@@ -54,6 +57,25 @@ export default function TabsLayout() {
       if (state === "active") {
         syncSelfReportBadge().catch((err) => {
           console.warn("Failed to sync self-report badge:", err);
+        });
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
+  // DIP-FP-164: mirrors the Self-Report effect above exactly — My Tasks is
+  // visible to every role (no role gate), so this syncs unconditionally on
+  // mount and on every foreground transition, same AppState precedent.
+  useEffect(() => {
+    syncMyTasksBadge().catch((err) => {
+      console.warn("Failed to sync My Tasks badge:", err);
+    });
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        syncMyTasksBadge().catch((err) => {
+          console.warn("Failed to sync My Tasks badge:", err);
         });
       }
     });
@@ -103,10 +125,12 @@ export default function TabsLayout() {
         name="my-tasks/index"
         options={{
           tabBarLabel: "My Tasks",
-          // DIP-FP-161-5-my-tasks-tab: no href gating, same reasoning as
-          // Self-Report — task assignments aren't role-scoped (any member
-          // can be individually or group-assigned a task), and no
-          // badge — explicitly read-only/no-notification per the DIP.
+          // DIP-FP-161-5-my-tasks-tab: no href gating — task assignments
+          // aren't role-scoped (any member can be individually or
+          // group-assigned a task). DIP-FP-164 superseded that DIP's
+          // original "no badge" decision — badge added, mirroring
+          // Confirmations/Self-Report's exact pattern.
+          tabBarBadge: pendingMyTasksCount > 0 ? pendingMyTasksCount : undefined,
         }}
       />
     </Tabs>
