@@ -31,8 +31,6 @@ export interface MyEvent {
   online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   event_type_id: string;
-  prayer_leader_member_id: string | null;
-  food_assignment: EventTargetSelector | null;
   created_at: string;
   effective_status: EffectiveEventStatus;
   rsvp_status: RsvpStatus | null;
@@ -101,12 +99,11 @@ export interface RosterEntry {
 // Matches flockpulse-web's POST /api/events request body exactly — the
 // outer body is camelCase, but confirmed live that target's *inner* keys
 // stay snake_case (group_ids/member_ids), same shape as EventTargetSelector
-// above. DIP-FP-161-3-task-wiring: prayerLeaderMemberId/foodAssignment
-// removed — task assignment now goes through the separate
-// event-tasks-assignments endpoints (see src/features/tasks), not this
-// input. The underlying prayer_leader_member_id/food_assignment columns
-// stay in the database and on MyEvent/EventDetail (see those types' own
-// comments) — this app just stops writing them going forward.
+// above. Task assignment goes through the separate event-tasks-assignments
+// endpoints (see src/features/tasks), not this input — DIP-FP-161-3
+// stopped writing prayer_leader_member_id/food_assignment here, and
+// DIP-FP-161-4 dropped the underlying columns entirely (removed from
+// MyEvent/CreatedEvent/UpdatedEvent too).
 export interface CreateEventInput {
   eventTypeId: string;
   name: string;
@@ -142,8 +139,6 @@ export interface CreatedEvent {
   online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   talk_id: string | null;
-  prayer_leader_member_id: string | null;
-  food_assignment: EventTargetSelector | null;
   created_at: string;
   created_by_member_id: string;
 }
@@ -169,9 +164,9 @@ export interface PublishedEvent {
 // save, not a sparse diff, so it always sends one or the other deliberately
 // rather than relying on JSON.stringify's undefined-drops-the-key behavior.
 //
-// DIP-FP-161-3-task-wiring: prayerLeaderMemberId/foodAssignment removed,
-// same reasoning as CreateEventInput's own comment above — task assignment
-// now goes through the event-tasks-assignments endpoints instead.
+// prayerLeaderMemberId/foodAssignment removed — same reasoning as
+// CreateEventInput's own comment above, task assignment goes through the
+// event-tasks-assignments endpoints instead.
 export interface UpdateEventInput {
   eventTypeId: string;
   name: string;
@@ -209,8 +204,6 @@ export interface UpdatedEvent {
   online_meeting_platform_label: string | null;
   target: EventTargetSelector;
   talk_id: string | null;
-  prayer_leader_member_id: string | null;
-  food_assignment: EventTargetSelector | null;
   updated_at: string;
 }
 
