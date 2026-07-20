@@ -8,6 +8,7 @@ import { syncSelfReportBadge } from "@/src/features/notifications/services/selfR
 import { useSelfReportBadgeCount } from "@/src/features/notifications/hooks/useSelfReportBadgeCount";
 import { syncMyTasksBadge } from "@/src/features/notifications/services/myTasksBadge.service";
 import { useMyTasksBadgeCount } from "@/src/features/notifications/hooks/useMyTasksBadgeCount";
+import { useMyEventsBadgeCount } from "@/src/features/notifications/hooks/useMyEventsBadgeCount";
 import { AnimatedTabBar } from "@/src/features/navigation/AnimatedTabBar";
 
 export default function TabsLayout() {
@@ -18,6 +19,11 @@ export default function TabsLayout() {
   const pendingCount = useConfirmationBadgeCount();
   const pendingSelfReportCount = useSelfReportBadgeCount();
   const pendingMyTasksCount = useMyTasksBadgeCount();
+  // DIP-FP-165: no accompanying sync effect here, unlike the other three
+  // badges above — My Events (index.tsx) computes and syncs its own count
+  // locally from state it already holds, rather than this layout fetching
+  // anything on its behalf. This just consumes the resulting store value.
+  const pendingMyEventsCount = useMyEventsBadgeCount();
 
   // FP-99: syncs both the OS app icon badge and (via the shared store
   // useConfirmationBadgeCount exposes) this tab's own badge — on mount and
@@ -102,7 +108,17 @@ export default function TabsLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen name="index" options={{ tabBarLabel: "My Events" }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          tabBarLabel: "My Events",
+          // DIP-FP-165: events with no RSVP response yet, RSVP still open —
+          // count computed locally in index.tsx (see its own comments),
+          // synced into this same module-level-store/OS-badge pattern as
+          // the other three tabs.
+          tabBarBadge: pendingMyEventsCount > 0 ? pendingMyEventsCount : undefined,
+        }}
+      />
       <Tabs.Screen
         name="confirmations/index"
         options={{

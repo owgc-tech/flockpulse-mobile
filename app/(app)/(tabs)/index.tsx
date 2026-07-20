@@ -19,6 +19,8 @@ import { reconcileEventReminders } from "@/src/features/notifications/services/r
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
+import { syncMyEventsBadge } from "@/src/features/notifications/hooks/useMyEventsBadgeCount";
+import { isRsvpWindowOpen } from "@/src/features/events/utils";
 import type { MeetingResource, MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -141,6 +143,17 @@ export default function MyEventsScreen() {
 
   const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
   const sections = useMemo(() => groupEventsByMonth(events), [events]);
+
+  // DIP-FP-165: derived locally from `events` (already fully in state, with
+  // rsvp_status/effective_status/rsvp_closure_at all present) rather than a
+  // separate fetch — a second query for this could disagree with what the
+  // list itself is showing, even if only briefly, unlike Confirmations/
+  // Self-Report/My Tasks, which have no local list to derive from and so
+  // fetch their own pending-count independently.
+  const pendingRsvpCount = useMemo(
+    () => events.filter((e) => !e.rsvp_status && isRsvpWindowOpen(e)).length,
+    [events]
+  );
 
   // Measured heights, keyed by event id (rows) and by section key (headers).
   // Headers are keyed per-section rather than sharing one ref because a
@@ -290,6 +303,18 @@ export default function MyEventsScreen() {
       }
     }, [])
   );
+
+  // DIP-FP-165: keyed on pendingRsvpCount (derived from events, see above),
+  // not on focus — this fires whenever the underlying count could have
+  // changed (initial load, pull-to-refresh, and the FP-151 signal above
+  // alike), which is a strict superset of "on focus" and needs no fetch of
+  // its own, unlike the other three tabs' badge-sync effects in
+  // (tabs)/_layout.tsx.
+  useEffect(() => {
+    syncMyEventsBadge(pendingRsvpCount).catch((err) => {
+      console.warn("Failed to sync My Events badge:", err);
+    });
+  }, [pendingRsvpCount]);
 
   const handlePressEvent = (event: MyEvent) => {
     router.push({
