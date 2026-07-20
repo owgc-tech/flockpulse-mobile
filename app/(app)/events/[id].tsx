@@ -95,12 +95,13 @@ async function resolveFoodAssignmentNames(assignment: EventTargetSelector): Prom
 
 // This screen's local state needs both MyEvent's rsvp_status/rsvp_reason
 // (present on the initial route-param object, which is MyEvent-shaped) and
-// EventDetail's talk_id/created_by_member_id (only present after the
-// fresh-fetch below resolves and merges in) — EventDetail itself represents
-// the endpoint's actual complete, always-present response shape (see its doc
-// comment), so those two fields are Partial'd here to reflect that this
-// component's own state may not have them yet.
-type ScreenEvent = MyEvent & Partial<Pick<EventDetail, "talk_id" | "created_by_member_id">>;
+// EventDetail's talk_id/created_by_member_id/owner_member_id (only present
+// after the fresh-fetch below resolves and merges in) — EventDetail itself
+// represents the endpoint's actual complete, always-present response shape
+// (see its doc comment), so those fields are Partial'd here to reflect that
+// this component's own state may not have them yet.
+type ScreenEvent = MyEvent &
+  Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id">>;
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -296,19 +297,21 @@ export default function EventDetailScreen() {
   }
 
   // DIP-FP-115-mobile-nav-calendar-edit Grounding Check formula: Admin-tier
-  // can edit any event; everyone else only their own. created_by_member_id
-  // is undefined until the fresh-fetch above resolves, and myProfileId is
-  // null until its own fetch resolves — canEdit stays false (button hidden,
-  // not flashed-then-hidden) until both are known, same defensive pattern
-  // used for showRoster above. Real enforcement is server-side regardless
-  // (see updateEvent's doc comment) — this only controls whether the button
-  // renders.
+  // can edit any event; everyone else only their own. DIP-FP-161-2-event-owner
+  // migrated the ownership check from the immutable created_by_member_id to
+  // the transferable owner_member_id, so reassigning an event's owner
+  // actually transfers this gate. owner_member_id is undefined until the
+  // fresh-fetch above resolves, and myProfileId is null until its own fetch
+  // resolves — canEdit stays false (button hidden, not flashed-then-hidden)
+  // until both are known, same defensive pattern used for showRoster above.
+  // Real enforcement is server-side regardless (see updateEvent's doc
+  // comment) — this only controls whether the button renders.
   const isAdminTier = role === "ADMIN";
   const canEdit =
     role !== undefined &&
-    event.created_by_member_id !== undefined &&
+    event.owner_member_id !== undefined &&
     myProfileId !== null &&
-    (isAdminTier || event.created_by_member_id === myProfileId);
+    (isAdminTier || event.owner_member_id === myProfileId);
 
   const handleEditPress = () => {
     router.push({
