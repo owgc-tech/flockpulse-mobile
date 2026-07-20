@@ -36,3 +36,24 @@ export interface EventTaskAssignment {
 // Leader/Food Assignment fields — not a schema concept, just this DIP's UI
 // convention, mirrored from web's EventForm.tsx.
 export const CORE_TASK_NAMES: readonly string[] = ["Prayer Leader", "Food Assignment", "Music"];
+
+// DIP-FP-161-5-my-tasks-tab: GET /api/event-tasks-assignments/mine's
+// response row. This endpoint didn't exist yet in flockpulse-web at the
+// time this type was written (its own DIP's Phase 5 work hadn't started) —
+// this shape is PROPOSED, not confirmed live against a real route handler
+// the way every other type in this file is. Deliberately flat/lightweight
+// (task + event display fields only, no nested event object) so My Tasks
+// can navigate to the event detail screen with just event_id, relying on
+// that screen's own fresh-fetch rather than requiring this endpoint to
+// duplicate My Events' full event-shape responsibility. Reconcile field
+// names against the actual web implementation once FP-161-5's web PR
+// lands, and update this comment once confirmed live.
+export interface MyTaskAssignment {
+  id: string;
+  task_id: string;
+  task_name: string;
+  event_id: string;
+  event_name: string;
+  event_start_datetime: string;
+  event_location_name: string;
+}

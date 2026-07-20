@@ -186,10 +186,13 @@ export default function EventDetailScreen() {
   }, []);
 
   useEffect(() => {
-    if (!params.event) {
-      setParseError(true);
-      return;
-    }
+    // DIP-FP-161-5-my-tasks-tab: no event param at all is a distinct case
+    // from malformed JSON — My Tasks navigates here with only `id` (its
+    // list rows aren't MyEvent-shaped, so there's nothing valid to pass),
+    // relying entirely on the fresh-fetch below to populate `event` from
+    // scratch. Leaving event null here (not setting parseError) renders the
+    // ordinary "Loading…" state instead of a permanent error.
+    if (!params.event) return;
     try {
       // The initial object is MyEvent-shaped (list-screen tap or
       // notification payload) — it never has created_by_member_id, only the
@@ -231,7 +234,17 @@ export default function EventDetailScreen() {
       if (!params.id) return;
       getEventById(params.id)
         .then((fresh) => {
-          setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+          // DIP-FP-161-5-my-tasks-tab: previously this only ever merged
+          // onto an already-known event (prev truthy), since every caller
+          // used to pass a full MyEvent-shaped `event` param. My Tasks
+          // doesn't have one to pass, so `prev` can now legitimately start
+          // null — in that case, build ScreenEvent state directly from the
+          // fetch. getEventById's EventDetail response doesn't carry
+          // rsvp_status/rsvp_reason (only /api/events/mine's list response
+          // does — see EventDetail's own doc comment), so those default to
+          // null here; a real value only ever arrives via the list-screen
+          // merge path.
+          setEvent((prev) => (prev ? { ...prev, ...fresh } : { ...fresh, rsvp_status: null, rsvp_reason: null }));
         })
         .catch((err) => {
           console.warn("Failed to fresh-fetch event:", err);

@@ -1,9 +1,17 @@
 import { apiFetch } from "@/src/lib/api";
 import type { EventTargetSelector } from "@/src/features/events/types";
-import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
+import type { EventTaskAssignment, MyTaskAssignment, Task } from "@/src/features/tasks/types";
 
 export async function listTasks(): Promise<Task[]> {
   return apiFetch<Task[]>("/api/tasks");
+}
+
+// GET /api/event-tasks-assignments/mine — DIP-FP-161-5-my-tasks-tab. See
+// MyTaskAssignment's own doc comment: this endpoint's response shape is
+// PROPOSED, not yet confirmed live (the web PR hadn't been built at the
+// time this was written).
+export async function listMyTaskAssignments(): Promise<MyTaskAssignment[]> {
+  return apiFetch<MyTaskAssignment[]>("/api/event-tasks-assignments/mine");
 }
 
 // GET /api/event-tasks-assignments?event_id= — confirmed live against the

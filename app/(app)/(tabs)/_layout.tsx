@@ -99,6 +99,16 @@ export default function TabsLayout() {
           tabBarBadge: pendingSelfReportCount > 0 ? pendingSelfReportCount : undefined,
         }}
       />
+      <Tabs.Screen
+        name="my-tasks/index"
+        options={{
+          tabBarLabel: "My Tasks",
+          // DIP-FP-161-5-my-tasks-tab: no href gating, same reasoning as
+          // Self-Report — task assignments aren't role-scoped (any member
+          // can be individually or group-assigned a task), and no
+          // badge — explicitly read-only/no-notification per the DIP.
+        }}
+      />
     </Tabs>
   );
 }

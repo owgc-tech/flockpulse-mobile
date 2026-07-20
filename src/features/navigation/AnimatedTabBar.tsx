@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
-import { Calendar, CircleCheck, ClipboardCheck } from "lucide-react-native";
+import { Calendar, CircleCheck, ClipboardCheck, ListChecks } from "lucide-react-native";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import { darkColors } from "@/src/theme/colors";
 
@@ -21,6 +21,10 @@ const ROUTE_ICONS: Record<string, typeof Calendar> = {
   index: Calendar,
   "confirmations/index": CircleCheck,
   "self-report/index": ClipboardCheck,
+  // DIP-FP-161-5-my-tasks-tab: distinct from ClipboardCheck
+  // (Self-Report)/CircleCheck (Confirmations) — a checklist reads as
+  // "tasks" specifically rather than a generic completion mark.
+  "my-tasks/index": ListChecks,
 };
 
 // A fully custom tabBar takes over ALL rendering, so nothing from the
