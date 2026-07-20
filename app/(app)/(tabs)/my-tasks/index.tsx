@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { listMyTaskAssignments } from "@/src/features/tasks/services/tasks.service";
+import { syncMyTasksBadge } from "@/src/features/notifications/services/myTasksBadge.service";
 import type { MyTaskAssignment } from "@/src/features/tasks/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -50,6 +51,16 @@ export default function MyTasksScreen() {
     try {
       const data = await listMyTaskAssignments();
       setItems(data);
+      // Gated on isRefresh, not every load — same precedent as Self-Report
+      // (see self-report/index.tsx): the tab layout's own effect already
+      // syncs the badge on mount and on every foreground transition, so
+      // resyncing here too on every focus-triggered load (see
+      // useFocusEffect below) would just be a redundant duplicate hit.
+      if (isRefresh) {
+        syncMyTasksBadge().catch((err) => {
+          console.warn("Failed to sync My Tasks badge:", err);
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load your tasks.");
     } finally {
@@ -58,9 +69,21 @@ export default function MyTasksScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // DIP-FP-164: Confirmations/Self-Report were found to be mount-only
+  // (plain useEffect, confirmed live — not focus-based, contrary to this
+  // DIP's original grounding claim), so there's no existing focus-refetch
+  // pattern to mirror. This is a deliberate, scoped addition to My Tasks
+  // specifically, per Joseph's direction — Confirmations/Self-Report are
+  // intentionally left as-is. Re-running on every focus (not just mount)
+  // doesn't reset isLoading/flash a spinner on casual tab switches, since
+  // that only happens on the very first call (isLoading starts true and
+  // nothing sets it back to true afterward) — same "quiet unless pulled"
+  // philosophy as My Events' own focus-driven refresh.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const handlePress = (item: MyTaskAssignment) => {
     router.push({
