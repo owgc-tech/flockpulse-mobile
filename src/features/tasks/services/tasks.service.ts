@@ -1,9 +1,15 @@
 import { apiFetch } from "@/src/lib/api";
 import type { EventTargetSelector } from "@/src/features/events/types";
-import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
+import type { EventTaskAssignment, MyTaskAssignment, Task } from "@/src/features/tasks/types";
 
 export async function listTasks(): Promise<Task[]> {
   return apiFetch<Task[]>("/api/tasks");
+}
+
+// GET /api/event-tasks-assignments/mine — confirmed live against the web
+// PR's MyTaskAssignmentRow once it landed (DIP-FP-161-5-my-tasks-tab).
+export async function listMyTaskAssignments(): Promise<MyTaskAssignment[]> {
+  return apiFetch<MyTaskAssignment[]>("/api/event-tasks-assignments/mine");
 }
 
 // GET /api/event-tasks-assignments?event_id= — confirmed live against the
