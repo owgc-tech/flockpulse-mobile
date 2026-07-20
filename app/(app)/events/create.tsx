@@ -34,7 +34,7 @@ import {
   listModules,
   listTalks,
 } from "@/src/features/formation/services/formation.service";
-import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
+import { GroupMemberChipPicker } from "@/src/features/shared/components/GroupMemberChipPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { EventType } from "@/src/features/event-types/types";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
@@ -760,7 +760,7 @@ export default function CreateEventScreen() {
         </>
       ) : null}
 
-      <MemberGroupPicker label="Target Audience" value={target} onChange={setTarget} />
+      <GroupMemberChipPicker label="Target Audience" value={target} onChange={setTarget} />
 
       <FormationTalkPicker
         talkLabel={talkLabel}
@@ -773,7 +773,7 @@ export default function CreateEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Tasks</Text>
       {displayedTasks.map((task) => (
-        <MemberGroupPicker
+        <GroupMemberChipPicker
           key={task.id}
           label={`${task.name} (optional)`}
           value={taskAssignments[task.id] ?? EMPTY_SELECTION}

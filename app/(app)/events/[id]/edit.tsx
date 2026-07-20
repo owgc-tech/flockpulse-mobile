@@ -36,7 +36,7 @@ import { reconcileEventReminders } from "@/src/features/notifications/services/r
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
-import { MemberGroupPicker } from "@/src/features/shared/components/MemberGroupPicker";
+import { GroupMemberChipPicker } from "@/src/features/shared/components/GroupMemberChipPicker";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 import type { Course, FormationModule, Talk } from "@/src/features/formation/types";
 import type { EventDetail, MeetingResource } from "@/src/features/events/types";
@@ -846,7 +846,7 @@ export default function EditEventScreen() {
         </>
       ) : null}
 
-      <MemberGroupPicker label="Target Audience" value={target} onChange={setTarget} />
+      <GroupMemberChipPicker label="Target Audience" value={target} onChange={setTarget} />
 
       <FormationTalkPicker
         talkLabel={talkLabel}
@@ -859,7 +859,7 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Tasks</Text>
       {displayedTasks.map((task) => (
-        <MemberGroupPicker
+        <GroupMemberChipPicker
           key={task.id}
           label={`${task.name} (optional)`}
           value={taskAssignments[task.id] ?? initialAssignmentSelection(task.id)}
