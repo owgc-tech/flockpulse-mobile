@@ -120,13 +120,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="confirmations/index"
+        name="my-tasks/index"
         options={{
-          tabBarLabel: "Confirmations",
-          href: showConfirmations ? undefined : null,
-          // undefined (not 0) when there's nothing pending — Tabs.Screen
-          // renders a bare dot for any defined badge value, including 0.
-          tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
+          tabBarLabel: "My Tasks",
+          // DIP-FP-161-5-my-tasks-tab: no href gating — task assignments
+          // aren't role-scoped (any member can be individually or
+          // group-assigned a task). DIP-FP-164 superseded that DIP's
+          // original "no badge" decision — badge added, mirroring
+          // Confirmations/Self-Report's exact pattern.
+          tabBarBadge: pendingMyTasksCount > 0 ? pendingMyTasksCount : undefined,
         }}
       />
       <Tabs.Screen
@@ -138,15 +140,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="my-tasks/index"
+        name="confirmations/index"
         options={{
-          tabBarLabel: "My Tasks",
-          // DIP-FP-161-5-my-tasks-tab: no href gating — task assignments
-          // aren't role-scoped (any member can be individually or
-          // group-assigned a task). DIP-FP-164 superseded that DIP's
-          // original "no badge" decision — badge added, mirroring
-          // Confirmations/Self-Report's exact pattern.
-          tabBarBadge: pendingMyTasksCount > 0 ? pendingMyTasksCount : undefined,
+          tabBarLabel: "Confirmations",
+          href: showConfirmations ? undefined : null,
+          // undefined (not 0) when there's nothing pending — Tabs.Screen
+          // renders a bare dot for any defined badge value, including 0.
+          tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
         }}
       />
     </Tabs>
