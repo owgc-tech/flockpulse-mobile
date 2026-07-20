@@ -21,6 +21,9 @@ import {
   publishEvent,
 } from "@/src/features/events/services/events.service";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
+import { createEventTaskAssignment, listTasks } from "@/src/features/tasks/services/tasks.service";
+import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
+import type { Task } from "@/src/features/tasks/types";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
@@ -358,8 +361,15 @@ export default function CreateEventScreen() {
   const [target, setTarget] = useState<TargetSelection>(EMPTY_SELECTION);
   const [talkId, setTalkId] = useState<string | undefined>(undefined);
   const [talkLabel, setTalkLabel] = useState<string | undefined>(undefined);
-  const [prayerLeader, setPrayerLeader] = useState<TargetSelection>(EMPTY_SELECTION);
-  const [foodAssignment, setFoodAssignment] = useState<TargetSelection>(EMPTY_SELECTION);
+  // DIP-FP-161-3-task-wiring: replaces the old dedicated prayerLeader/
+  // foodAssignment state — tasks is the fetched catalog, taskAssignments
+  // holds each displayed task's current picker selection keyed by task id,
+  // addedTaskIds tracks which non-core catalog tasks the user has
+  // explicitly added via the "Add Task" control below (the three core
+  // tasks are always displayed and never need adding).
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskAssignments, setTaskAssignments] = useState<Record<string, TargetSelection>>({});
+  const [addedTaskIds, setAddedTaskIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -373,6 +383,28 @@ export default function CreateEventScreen() {
         // eventTypeId at submit time either way.
       });
   }, []);
+
+  useEffect(() => {
+    listTasks()
+      .then(setTasks)
+      .catch(() => {
+        // Left as an empty list rather than blocking the form, same
+        // non-fatal handling as listEventTypes above — the three core
+        // tasks simply won't render pickers until the catalog loads.
+      });
+  }, []);
+
+  const coreTasks = useMemo(() => tasks.filter((t) => CORE_TASK_NAMES.includes(t.name)), [tasks]);
+  const addedTasks = useMemo(() => tasks.filter((t) => addedTaskIds.includes(t.id)), [tasks, addedTaskIds]);
+  const availableToAddTasks = useMemo(
+    () => tasks.filter((t) => !CORE_TASK_NAMES.includes(t.name) && !addedTaskIds.includes(t.id)),
+    [tasks, addedTaskIds]
+  );
+  const displayedTasks = useMemo(() => [...coreTasks, ...addedTasks], [coreTasks, addedTasks]);
+
+  const setTaskAssignment = (taskId: string, selection: TargetSelection) => {
+    setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
+  };
 
   const openDateTimePicker = (which: "start" | "end") => {
     const current = (which === "start" ? startDatetime : endDatetime) ?? new Date();
@@ -444,8 +476,6 @@ export default function CreateEventScreen() {
           : {}),
         target,
         ...(talkId ? { talkId } : {}),
-        ...(prayerLeader.member_ids[0] ? { prayerLeaderMemberId: prayerLeader.member_ids[0] } : {}),
-        ...(foodAssignment.group_ids.length || foodAssignment.member_ids.length ? { foodAssignment } : {}),
         ...(rsvpClosureDays.trim() ? { rsvpClosureDays: Number(rsvpClosureDays.trim()) } : {}),
       });
     } catch (err) {
@@ -458,6 +488,28 @@ export default function CreateEventScreen() {
       } else {
         setError(err instanceof Error ? err.message : "Failed to create event.");
       }
+      setIsSubmitting(false);
+      return;
+    }
+
+    // DIP-FP-161-3-task-wiring: task assignments are a separate resource
+    // from the event itself now (event-tasks-assignments), created here as
+    // a follow-up step — omitted entirely for any displayed task left with
+    // an empty selection, same "optional, no row if blank" behavior the old
+    // prayerLeaderMemberId/foodAssignment fields had.
+    try {
+      await Promise.all(
+        displayedTasks
+          .filter((task) => {
+            const selection = taskAssignments[task.id];
+            return selection && (selection.group_ids.length > 0 || selection.member_ids.length > 0);
+          })
+          .map((task) => createEventTaskAssignment(created.id, task.id, taskAssignments[task.id]))
+      );
+    } catch (err) {
+      setError(
+        `Event created but one or more task assignments could not be saved${err instanceof Error ? `: ${err.message}` : "."}`
+      );
       setIsSubmitting(false);
       return;
     }
@@ -719,15 +771,34 @@ export default function CreateEventScreen() {
         themed={themed}
       />
 
-      <MemberGroupPicker
-        label="Prayer Leader (optional)"
-        value={prayerLeader}
-        onChange={setPrayerLeader}
-        allowGroups={false}
-        singleMember
-      />
+      <Text style={[styles.label, themed.label]}>Tasks</Text>
+      {displayedTasks.map((task) => (
+        <MemberGroupPicker
+          key={task.id}
+          label={`${task.name} (optional)`}
+          value={taskAssignments[task.id] ?? EMPTY_SELECTION}
+          onChange={(selection) => setTaskAssignment(task.id, selection)}
+        />
+      ))}
 
-      <MemberGroupPicker label="Food Assignment (optional)" value={foodAssignment} onChange={setFoodAssignment} />
+      {availableToAddTasks.length > 0 ? (
+        <>
+          <Text style={[styles.label, themed.label]}>Add Task</Text>
+          <View style={styles.optionsRow}>
+            {availableToAddTasks.map((task) => (
+              <Pressable
+                key={task.id}
+                style={[styles.optionButton, themed.optionButton]}
+                onPress={() => setAddedTaskIds((prev) => [...prev, task.id])}
+                disabled={isSubmitting}
+                testID={`create-event-add-task-${task.id}`}
+              >
+                <Text style={[styles.optionText, themed.optionText]}>{task.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {error ? (
         <Text style={[styles.error, themed.error]} testID="create-event-error">

@@ -18,6 +18,15 @@ import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import {
+  createEventTaskAssignment,
+  deleteEventTaskAssignment,
+  listEventTaskAssignments,
+  listTasks,
+  updateEventTaskAssignment,
+} from "@/src/features/tasks/services/tasks.service";
+import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
+import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
+import {
   formationDisplayName,
   listCourses,
   listModules,
@@ -403,13 +412,20 @@ export default function EditEventScreen() {
   const [talkLabel, setTalkLabel] = useState<string | undefined>(
     initialEvent.talk_id ? "Talk selected (tap to change)" : undefined
   );
-  const [prayerLeader, setPrayerLeader] = useState<TargetSelection>({
-    group_ids: [],
-    member_ids: initialEvent.prayer_leader_member_id ? [initialEvent.prayer_leader_member_id] : [],
-  });
-  const [foodAssignment, setFoodAssignment] = useState<TargetSelection>(
-    targetToSelection(initialEvent.food_assignment)
-  );
+  // DIP-FP-161-3-task-wiring: replaces the old dedicated prayerLeader/
+  // foodAssignment state. tasks is the fetched catalog; existingAssignments
+  // is this event's current event_tasks_assignments rows (fetched below),
+  // used both to pre-fill each picker's default value (via
+  // initialAssignmentSelection) and, on submit, to diff against the current
+  // taskAssignments selections to decide create/update/delete per task.
+  // taskAssignments only holds a task's entry once the user has actually
+  // changed its picker — until then its default comes from
+  // initialAssignmentSelection, avoiding a race between this state's seed
+  // and the async existingAssignments fetch.
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [existingAssignments, setExistingAssignments] = useState<EventTaskAssignment[]>([]);
+  const [taskAssignments, setTaskAssignments] = useState<Record<string, TargetSelection>>({});
+  const [addedTaskIds, setAddedTaskIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -423,6 +439,58 @@ export default function EditEventScreen() {
         // as create.tsx.
       });
   }, []);
+
+  useEffect(() => {
+    listTasks()
+      .then(setTasks)
+      .catch(() => {
+        // Same non-fatal handling as listEventTypes above.
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!params.id) return;
+    listEventTaskAssignments(params.id)
+      .then(setExistingAssignments)
+      .catch(() => {
+        // Left empty rather than blocking the form — worst case, a
+        // previously-assigned task's picker starts blank instead of
+        // pre-filled, which the user can just re-enter.
+      });
+  }, [params.id]);
+
+  const coreTasks = useMemo(() => tasks.filter((t) => CORE_TASK_NAMES.includes(t.name)), [tasks]);
+  // Non-core tasks that already have an assignment need their picker shown
+  // immediately, same as the three core tasks always are — not something
+  // the user has to "Add" back in.
+  const preAssignedNonCoreTaskIds = useMemo(
+    () => existingAssignments.map((a) => a.task_id).filter((id) => !coreTasks.some((t) => t.id === id)),
+    [existingAssignments, coreTasks]
+  );
+  const addedTasks = useMemo(
+    () => tasks.filter((t) => addedTaskIds.includes(t.id) || preAssignedNonCoreTaskIds.includes(t.id)),
+    [tasks, addedTaskIds, preAssignedNonCoreTaskIds]
+  );
+  const availableToAddTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          !CORE_TASK_NAMES.includes(t.name) &&
+          !addedTaskIds.includes(t.id) &&
+          !preAssignedNonCoreTaskIds.includes(t.id)
+      ),
+    [tasks, addedTaskIds, preAssignedNonCoreTaskIds]
+  );
+  const displayedTasks = useMemo(() => [...coreTasks, ...addedTasks], [coreTasks, addedTasks]);
+
+  const initialAssignmentSelection = (taskId: string): TargetSelection => {
+    const match = existingAssignments.find((a) => a.task_id === taskId);
+    return match ? targetToSelection(match.assignee) : EMPTY_SELECTION;
+  };
+
+  const setTaskAssignment = (taskId: string, selection: TargetSelection) => {
+    setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
+  };
 
   useEffect(() => {
     if (!initialEvent.online_meeting_resource_id) return;
@@ -503,11 +571,38 @@ export default function EditEventScreen() {
           meetingMode === "other" && onlineMeetingPlatformLabel.trim() ? onlineMeetingPlatformLabel.trim() : null,
         target,
         talkId: talkId ?? null,
-        prayerLeaderMemberId: prayerLeader.member_ids[0] ?? null,
-        foodAssignment:
-          foodAssignment.group_ids.length || foodAssignment.member_ids.length ? foodAssignment : null,
         rsvpClosureDays: rsvpClosureDays.trim() ? Number(rsvpClosureDays.trim()) : null,
       });
+
+      // DIP-FP-161-3-task-wiring: task assignments are a separate resource
+      // from the event itself (event-tasks-assignments), reconciled here as
+      // a follow-up step against existingAssignments — created for newly-
+      // assigned tasks, updated for changed assignees, deleted for
+      // cleared/removed ones. A task left with an empty selection and no
+      // prior assignment is a no-op.
+      try {
+        await Promise.all(
+          displayedTasks.map(async (task) => {
+            const existing = existingAssignments.find((a) => a.task_id === task.id);
+            const selection = taskAssignments[task.id] ?? initialAssignmentSelection(task.id);
+            const hasSelection = selection.group_ids.length > 0 || selection.member_ids.length > 0;
+
+            if (existing && !hasSelection) {
+              await deleteEventTaskAssignment(existing.id);
+            } else if (existing && hasSelection) {
+              await updateEventTaskAssignment(existing.id, selection);
+            } else if (!existing && hasSelection) {
+              await createEventTaskAssignment(params.id, task.id, selection);
+            }
+          })
+        );
+      } catch (err) {
+        setError(
+          `Event updated but one or more task assignments could not be saved${err instanceof Error ? `: ${err.message}` : "."}`
+        );
+        setIsSubmitting(false);
+        return;
+      }
 
       // FP-96-FP-97-adj-1: My Events' own mount effect (where reconciliation
       // normally runs) deliberately doesn't refetch on focus, so without
@@ -762,15 +857,34 @@ export default function EditEventScreen() {
         themed={themed}
       />
 
-      <MemberGroupPicker
-        label="Prayer Leader (optional)"
-        value={prayerLeader}
-        onChange={setPrayerLeader}
-        allowGroups={false}
-        singleMember
-      />
+      <Text style={[styles.label, themed.label]}>Tasks</Text>
+      {displayedTasks.map((task) => (
+        <MemberGroupPicker
+          key={task.id}
+          label={`${task.name} (optional)`}
+          value={taskAssignments[task.id] ?? initialAssignmentSelection(task.id)}
+          onChange={(selection) => setTaskAssignment(task.id, selection)}
+        />
+      ))}
 
-      <MemberGroupPicker label="Food Assignment (optional)" value={foodAssignment} onChange={setFoodAssignment} />
+      {availableToAddTasks.length > 0 ? (
+        <>
+          <Text style={[styles.label, themed.label]}>Add Task</Text>
+          <View style={styles.optionsRow}>
+            {availableToAddTasks.map((task) => (
+              <Pressable
+                key={task.id}
+                style={[styles.optionButton, themed.optionButton]}
+                onPress={() => setAddedTaskIds((prev) => [...prev, task.id])}
+                disabled={isSubmitting}
+                testID={`edit-event-add-task-${task.id}`}
+              >
+                <Text style={[styles.optionText, themed.optionText]}>{task.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       {error ? (
         <Text style={[styles.error, themed.error]} testID="edit-event-error">

@@ -13,6 +13,7 @@ import {
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
+import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/services/tasks.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { getMapUrl, isRsvpWindowOpen } from "@/src/features/events/utils";
@@ -25,6 +26,7 @@ import type {
   RsvpStatus,
 } from "@/src/features/events/types";
 import type { EventReminderFormation } from "@/src/features/notifications/types";
+import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -65,12 +67,14 @@ interface GroupLookupRow {
   name: string;
 }
 
-// Resolves food_assignment's group_ids/member_ids into display names.
-// Each id is looked up independently via Promise.allSettled (not
-// Promise.all) so one bad id — e.g. a group that's since been soft-deleted —
-// only drops that one name from the list rather than failing the whole
-// Food Assignment section.
-async function resolveFoodAssignmentNames(assignment: EventTargetSelector): Promise<string> {
+// DIP-FP-161-3-task-wiring: resolves a task assignment's group_ids/
+// member_ids into display names — generalized from the old, food-specific
+// resolveFoodAssignmentNames (same logic, now used for every task's
+// assignee, not just Food Assignment). Each id is looked up independently
+// via Promise.allSettled (not Promise.all) so one bad id — e.g. a group
+// that's since been soft-deleted — only drops that one name from the list
+// rather than failing the whole Tasks section.
+async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<string> {
   const groupIds = assignment.group_ids ?? [];
   const memberIds = assignment.member_ids ?? [];
 
@@ -146,15 +150,40 @@ export default function EventDetailScreen() {
   const [event, setEvent] = useState<ScreenEvent | null>(null);
   const [parseError, setParseError] = useState(false);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
-  const [prayerLeaderName, setPrayerLeaderName] = useState<string | null>(null);
-  const [foodAssignmentNames, setFoodAssignmentNames] = useState<string | null>(null);
   const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
   const [meetingResource, setMeetingResource] = useState<MeetingResource | null>(null);
   // Distinguishes "still fetching" from "fetched, nothing to show" (e.g. the
-  // prayer leader lookup rejected outright) — without this, a rejected
+  // Formation Talk lookup rejected outright) — without this, a rejected
   // lookup would leave its section reading "Loading…" forever instead of
   // settling on a final answer.
   const [contextLookupsSettled, setContextLookupsSettled] = useState(false);
+  // DIP-FP-161-3-task-wiring: replaces prayerLeaderName/foodAssignmentNames.
+  // null = not yet loaded (Tasks section renders a Loading row); [] = loaded
+  // with nothing assigned (section renders nothing, same "hide if empty"
+  // behavior the old individual fields had). Task assignments live in a
+  // separate table, not merged into `event`, so — unlike the fields above —
+  // nothing on `event` itself changes when an assignment changes; this is
+  // why it's loaded via its own function called from useFocusEffect and
+  // handleRefresh below instead of the event-field-keyed effect.
+  const [taskAssignmentRows, setTaskAssignmentRows] = useState<
+    { taskId: string; taskName: string; assigneeNames: string }[] | null
+  >(null);
+
+  const loadTaskAssignmentRows = useCallback(async (eventId: string) => {
+    const [tasks, assignments] = await Promise.all([listTasks(), listEventTaskAssignments(eventId)]);
+    const taskNameById = new Map<string, string>(tasks.map((t: Task) => [t.id, t.name]));
+    const assigned = assignments.filter(
+      (a: EventTaskAssignment) =>
+        a.assignee && ((a.assignee.group_ids?.length ?? 0) > 0 || (a.assignee.member_ids?.length ?? 0) > 0)
+    );
+    return Promise.all(
+      assigned.map(async (a: EventTaskAssignment) => ({
+        taskId: a.task_id,
+        taskName: taskNameById.get(a.task_id) ?? "Unknown Task",
+        assigneeNames: await resolveAssigneeNames(a.assignee as EventTargetSelector),
+      }))
+    );
+  }, []);
 
   useEffect(() => {
     if (!params.event) {
@@ -207,42 +236,41 @@ export default function EventDetailScreen() {
         .catch((err) => {
           console.warn("Failed to fresh-fetch event:", err);
         });
-    }, [params.id])
+      loadTaskAssignmentRows(params.id)
+        .then(setTaskAssignmentRows)
+        .catch((err) => {
+          console.warn("Failed to load task assignments:", err);
+          setTaskAssignmentRows([]);
+        });
+    }, [params.id, loadTaskAssignmentRows])
   );
 
-  // Prayer Leader / Food Assignment / Formation Talk are three independent
-  // lookups — Promise.allSettled (not sequential awaits) so one failing
-  // (e.g. a soft-deleted group behind food_assignment) can't blank the
-  // other two, same defensive pattern as myProfileId above. talk_id isn't
+  // Formation Talk / Meeting Resource are two independent lookups —
+  // Promise.allSettled (not sequential awaits) so one failing can't blank
+  // the other, same defensive pattern as myProfileId above. talk_id isn't
   // present on the initial MyEvent-shaped object (only after the
   // fresh-fetch merge above resolves), so this naturally re-runs once that
   // merge lands and picks up the Formation Talk lookup at that point.
+  // DIP-FP-161-3-task-wiring: Prayer Leader/Food Assignment removed from
+  // this effect — task assignments (which replace them) are loaded
+  // separately via loadTaskAssignmentRows above, since they live in a
+  // separate table with no corresponding field on `event` to key this
+  // effect's dependency array on.
   useEffect(() => {
     if (!event) return;
     setContextLookupsSettled(false);
 
     Promise.allSettled([
-      event.prayer_leader_member_id
-        ? apiFetch<MemberLookupRow>(`/api/members?id=${event.prayer_leader_member_id}`)
-        : Promise.resolve(null),
-      event.food_assignment ? resolveFoodAssignmentNames(event.food_assignment) : Promise.resolve(null),
       event.talk_id ? fetchReminderContext(event.id) : Promise.resolve(null),
       // Only the id is on the event itself — the display name and actual
       // join_url live on the tracked resource, same reasoning as the
-      // Prayer Leader/Food Assignment id-to-name lookups above.
+      // Formation Talk lookup above.
       event.online_meeting_resource_id
         ? listMeetingResources().then(
             (resources) => resources.find((r) => r.id === event.online_meeting_resource_id) ?? null
           )
         : Promise.resolve(null),
-    ]).then(([prayerResult, foodResult, talkResult, meetingResourceResult]) => {
-      if (prayerResult.status === "fulfilled" && prayerResult.value) {
-        const member = prayerResult.value;
-        setPrayerLeaderName(`${member.first_name} ${member.last_name}`);
-      }
-      if (foodResult.status === "fulfilled" && foodResult.value) {
-        setFoodAssignmentNames(foodResult.value);
-      }
+    ]).then(([talkResult, meetingResourceResult]) => {
       if (talkResult.status === "fulfilled" && talkResult.value?.formation) {
         setFormationTalk(talkResult.value.formation);
       }
@@ -251,24 +279,19 @@ export default function EventDetailScreen() {
       }
       setContextLookupsSettled(true);
     });
-  }, [
-    event?.id,
-    event?.prayer_leader_member_id,
-    event?.food_assignment,
-    event?.talk_id,
-    event?.online_meeting_resource_id,
-  ]);
+  }, [event?.id, event?.talk_id, event?.online_meeting_resource_id]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [rosterRefreshTrigger, setRosterRefreshTrigger] = useState(0);
 
   // Pull-to-refresh needs to re-trigger every independent piece of this
   // screen's data, not just the event: re-fetching and merging the event
-  // object already covers the Prayer Leader/Food Assignment/Formation Talk
-  // lookups (their own useEffect above is keyed on the relevant event
-  // fields, so it re-runs automatically if those actually changed) — but
-  // Roster lives in its own nested component with its own fetch, so it
-  // needs an explicit trigger bump to know to reload.
+  // object already covers the Formation Talk lookup (its own useEffect
+  // above is keyed on the relevant event fields, so it re-runs
+  // automatically if those actually changed) — but Roster and Tasks each
+  // live outside that merge (Roster in its own nested component with its
+  // own fetch, Tasks in a separate table with no field on `event` to key
+  // off), so both need an explicit reload here.
   const handleRefresh = useCallback(async () => {
     if (!params.id) return;
     setIsRefreshing(true);
@@ -277,11 +300,15 @@ export default function EventDetailScreen() {
       setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
     } catch (err) {
       console.warn("Failed to refresh event:", err);
-    } finally {
-      setIsRefreshing(false);
     }
+    try {
+      setTaskAssignmentRows(await loadTaskAssignmentRows(params.id));
+    } catch (err) {
+      console.warn("Failed to refresh task assignments:", err);
+    }
+    setIsRefreshing(false);
     setRosterRefreshTrigger((t) => t + 1);
-  }, [params.id]);
+  }, [params.id, loadTaskAssignmentRows]);
 
   if (parseError || !event) {
     return (
@@ -377,21 +404,25 @@ export default function EventDetailScreen() {
 
       <View style={[styles.divider, themed.divider]} />
 
-      {event.prayer_leader_member_id ? (
+      {/* DIP-FP-161-3-task-wiring: replaces the old separate Prayer
+          Leader/Food Assignment rows with a single unified Tasks section —
+          taskAssignmentRows === null means still loading; an empty array
+          (loaded, nothing assigned) renders nothing, same "hide if empty"
+          behavior those two fields had individually. */}
+      {taskAssignmentRows === null ? (
         <View style={styles.fieldGroup}>
-          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Prayer Leader</Text>
-          <Text style={[styles.fieldValue, themed.fieldValue]}>
-            {prayerLeaderName ?? (contextLookupsSettled ? "Not available" : "Loading…")}
-          </Text>
+          <Text style={[styles.sectionTitle, themed.sectionTitle]}>Tasks</Text>
+          <Text style={[styles.metaSecondary, themed.metaSecondary]}>Loading…</Text>
         </View>
-      ) : null}
-
-      {event.food_assignment ? (
+      ) : taskAssignmentRows.length > 0 ? (
         <View style={styles.fieldGroup}>
-          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Food Assignment</Text>
-          <Text style={[styles.fieldValue, themed.fieldValue]}>
-            {foodAssignmentNames || (contextLookupsSettled ? "Not available" : "Loading…")}
-          </Text>
+          <Text style={[styles.sectionTitle, themed.sectionTitle]}>Tasks</Text>
+          {taskAssignmentRows.map((row) => (
+            <View key={row.taskId} style={styles.fieldGroup}>
+              <Text style={[styles.fieldLabel, themed.fieldLabel]}>{row.taskName}</Text>
+              <Text style={[styles.fieldValue, themed.fieldValue]}>{row.assigneeNames}</Text>
+            </View>
+          ))}
         </View>
       ) : null}
 
