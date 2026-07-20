@@ -99,9 +99,14 @@ export interface RosterEntry {
 }
 
 // Matches flockpulse-web's POST /api/events request body exactly — the
-// outer body is camelCase, but confirmed live that target/foodAssignment's
-// *inner* keys stay snake_case (group_ids/member_ids), same shape as
-// EventTargetSelector above.
+// outer body is camelCase, but confirmed live that target's *inner* keys
+// stay snake_case (group_ids/member_ids), same shape as EventTargetSelector
+// above. DIP-FP-161-3-task-wiring: prayerLeaderMemberId/foodAssignment
+// removed — task assignment now goes through the separate
+// event-tasks-assignments endpoints (see src/features/tasks), not this
+// input. The underlying prayer_leader_member_id/food_assignment columns
+// stay in the database and on MyEvent/EventDetail (see those types' own
+// comments) — this app just stops writing them going forward.
 export interface CreateEventInput {
   eventTypeId: string;
   name: string;
@@ -115,8 +120,6 @@ export interface CreateEventInput {
   onlineMeetingPlatformLabel?: string;
   target: EventTargetSelector;
   talkId?: string;
-  prayerLeaderMemberId?: string;
-  foodAssignment?: EventTargetSelector;
   // DIP-FP-132-FP-133-FP-134: per-event RSVP closure override, in days
   // before start_datetime. Omitted (not sent) falls back to the tenant
   // default — confirmed live against POST /api/events's route handler.
@@ -165,6 +168,10 @@ export interface PublishedEvent {
 // it." The edit screen submits a full representation of the form on every
 // save, not a sparse diff, so it always sends one or the other deliberately
 // rather than relying on JSON.stringify's undefined-drops-the-key behavior.
+//
+// DIP-FP-161-3-task-wiring: prayerLeaderMemberId/foodAssignment removed,
+// same reasoning as CreateEventInput's own comment above — task assignment
+// now goes through the event-tasks-assignments endpoints instead.
 export interface UpdateEventInput {
   eventTypeId: string;
   name: string;
@@ -178,8 +185,6 @@ export interface UpdateEventInput {
   onlineMeetingPlatformLabel: string | null;
   target: EventTargetSelector;
   talkId: string | null;
-  prayerLeaderMemberId: string | null;
-  foodAssignment: EventTargetSelector | null;
   // DIP-FP-132-FP-133-FP-134: always sent (never omitted), same convention
   // as every other field on this type — null explicitly reverts the event
   // to the tenant default, matching PATCH /api/events/:id's JSONB
