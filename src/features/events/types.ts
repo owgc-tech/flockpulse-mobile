@@ -68,6 +68,12 @@ export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   // override field instead of always defaulting to blank (which was
   // silently clearing any existing override on every unrelated save).
   rsvp_closure_days: number | null;
+  // DIP-FP-161-2-event-owner: the transferable owner, same endpoint
+  // asymmetry as created_by_member_id above (present on GET
+  // /api/events/:id, absent from /api/events/mine) — created_by_member_id
+  // is left in place for display/audit purposes, this is now the field
+  // the canEdit permission gate reads.
+  owner_member_id: string | null;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).
