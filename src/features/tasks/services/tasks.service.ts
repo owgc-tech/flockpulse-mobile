@@ -6,10 +6,8 @@ export async function listTasks(): Promise<Task[]> {
   return apiFetch<Task[]>("/api/tasks");
 }
 
-// GET /api/event-tasks-assignments/mine — DIP-FP-161-5-my-tasks-tab. See
-// MyTaskAssignment's own doc comment: this endpoint's response shape is
-// PROPOSED, not yet confirmed live (the web PR hadn't been built at the
-// time this was written).
+// GET /api/event-tasks-assignments/mine — confirmed live against the web
+// PR's MyTaskAssignmentRow once it landed (DIP-FP-161-5-my-tasks-tab).
 export async function listMyTaskAssignments(): Promise<MyTaskAssignment[]> {
   return apiFetch<MyTaskAssignment[]>("/api/event-tasks-assignments/mine");
 }

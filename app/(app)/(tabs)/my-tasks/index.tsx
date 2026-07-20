@@ -98,8 +98,8 @@ export default function MyTasksScreen() {
             >
               <Text style={[styles.taskName, themed.taskName]}>{item.task_name}</Text>
               <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
-              <Text style={[styles.meta, themed.meta]}>{formatEventDateTime(item.event_start_datetime)}</Text>
-              <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
+              <Text style={[styles.meta, themed.meta]}>{formatEventDateTime(item.start_datetime)}</Text>
+              <Text style={[styles.meta, themed.meta]}>{item.location_name}</Text>
             </Pressable>
           )}
         />
