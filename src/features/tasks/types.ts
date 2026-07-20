@@ -7,6 +7,10 @@ export interface Task {
   id: string;
   tenant_id: string;
   name: string;
+  // DIP-FP-163: when true, this task's assignee picker excludes groups
+  // entirely (individuals only) — restores the constraint Prayer Leader had
+  // before DIP-FP-161-3-task-wiring unified all tasks onto one picker.
+  individual_only: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

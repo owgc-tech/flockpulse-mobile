@@ -778,6 +778,7 @@ export default function CreateEventScreen() {
           label={`${task.name} (optional)`}
           value={taskAssignments[task.id] ?? EMPTY_SELECTION}
           onChange={(selection) => setTaskAssignment(task.id, selection)}
+          individualOnly={task.individual_only}
         />
       ))}
 
