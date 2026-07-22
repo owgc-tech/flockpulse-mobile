@@ -7,13 +7,6 @@ updates:
     target-branch: "dev"
     open-pull-requests-limit: 10
 
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    target-branch: "main"
-    open-pull-requests-limit: 10
-
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
