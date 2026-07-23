@@ -104,10 +104,26 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <AnimatedTabBar {...props} />}
+      // DIP-FP-182-mobile: Dashboard is declared first below so it renders
+      // as the leftmost tab, but that would also make it expo-router's
+      // default initial route unless pinned explicitly — initialRouteName
+      // keeps the app landing on My Events on launch either way, decoupling
+      // landing route from visual tab order.
+      initialRouteName="index"
       screenOptions={{
         headerShown: false,
       }}
     >
+      <Tabs.Screen
+        name="dashboard/index"
+        options={{
+          // Icon-only tab (see AnimatedTabBar's ALWAYS_ACCENT_ROUTES) — no
+          // role gating, per this DIP's Grounding Check: visibility is
+          // entirely a function of what the dashboard API returns, not
+          // conditional logic here.
+          tabBarLabel: "",
+        }}
+      />
       <Tabs.Screen
         name="index"
         options={{
