@@ -184,14 +184,23 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
                   </View>
                 ) : null}
               </View>
-              {label ? (
-                <Text
-                  style={[styles.label, { color: isFocused ? colors.accent : colors.textMuted }]}
-                  numberOfLines={1}
-                >
-                  {label}
-                </Text>
-              ) : null}
+              {/* DIP-FP-182-mobile-adj-1: always rendered, even when label
+                  is "" (Dashboard) — an omitted Text element would still
+                  likely end up the same height in practice, since
+                  `container`'s row cross-axis defaults to stretch and every
+                  Pressable ends up sized to the tallest sibling regardless of
+                  its own content. But that's not something verifiable
+                  without a running app, so this keeps the element structure
+                  identical across every tab instead of relying on that
+                  reasoning — the empty string simply renders no visible
+                  text, satisfying the "same total visual footprint"
+                  requirement without depending on an unverified assumption. */}
+              <Text
+                style={[styles.label, { color: isFocused ? colors.accent : colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
             </Pressable>
           );
         })}

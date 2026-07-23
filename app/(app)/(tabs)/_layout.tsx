@@ -104,12 +104,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       tabBar={(props) => <AnimatedTabBar {...props} />}
-      // DIP-FP-182-mobile: Dashboard is declared first below so it renders
-      // as the leftmost tab, but that would also make it expo-router's
-      // default initial route unless pinned explicitly — initialRouteName
-      // keeps the app landing on My Events on launch either way, decoupling
-      // landing route from visual tab order.
-      initialRouteName="index"
+      // DIP-FP-182-mobile-adj-1: the story's own confirmed decision is that
+      // Dashboard is the landing route, not My Events — corrects the first
+      // draft, which pinned initialRouteName to "index" instead.
+      initialRouteName="dashboard/index"
       screenOptions={{
         headerShown: false,
       }}

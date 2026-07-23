@@ -1,8 +1,15 @@
-// DIP-FP-182-mobile: this feature's endpoints depend on flockpulse-web's
-// companion DIP-FP-182-web, which hadn't been implemented/merged as of this
-// DIP — these shapes are the proposed contract this screen was built
-// against, not one confirmed live against a running route handler (see this
-// PR's description for what that means for testing).
+// DIP-FP-182-mobile-adj-1: matches flockpulse-web's report.repository.ts
+// exactly (DashboardEventType/DashboardEventOption/DefaultDashboardEvent/
+// DashboardStatsResult) — confirmed live against the route/service/
+// repository files directly, not guessed. The original draft's flat
+// event_type_id/event_type_name and invented attendance_rate/total_invited
+// fields never matched anything real; removed entirely rather than left
+// unused.
+
+export interface DashboardEventType {
+  id: string;
+  name: string;
+}
 
 export interface DashboardEventOption {
   id: string;
@@ -10,53 +17,55 @@ export interface DashboardEventOption {
   start_datetime: string;
 }
 
+// GET /api/reports/dashboard/default's success shape. No stats bundled in —
+// unlike this feature's first draft, which wrongly assumed the default
+// endpoint returned stats too (avoiding a second round-trip on first paint).
+// It doesn't; the initial stats fetch is a separate getDashboardStats() call
+// once event_type/event are known (see dashboard/index.tsx).
+export interface DefaultDashboardEvent {
+  event_type: DashboardEventType;
+  event: DashboardEventOption;
+}
+
 export interface DashboardAttendanceStats {
-  attended_count: number;
   expected_count: number;
-  // Raw 0-1 ratio (expected_count > 0 ? attended_count / expected_count : 0)
-  // — banding buckets this separately from the displayed percentage, same
-  // raw-vs-banded split as DashboardRatingStats.average_rating below.
-  attendance_rate: number;
+  attended_count: number;
+  did_not_attend_count: number;
+  did_not_self_report_count: number;
+  // 0-100, one decimal, already rounded server-side; null when
+  // expected_count is 0 (nothing to divide by).
+  percent: number | null;
 }
 
 export interface DashboardRsvpStats {
   yes_count: number;
   no_count: number;
+  tentative_count: number;
   no_response_count: number;
-  total_invited: number;
 }
 
+// No member_name — anonymized at the data layer server-side (the feedback
+// query's SELECT list never includes member_id or any joined member field),
+// so there is nothing to remove client-side either; this type simply
+// doesn't have the field.
 export interface DashboardFeedbackEntry {
-  member_name: string;
   star_rating: number | null;
   feedback: string;
 }
 
 export interface DashboardRatingStats {
-  // Raw average (e.g. 4.3), shown as-is. Card color banding rounds this to
-  // the nearest whole star separately (see dashboard/index.tsx) so a score
-  // just under a threshold (e.g. 3.98) doesn't get a harsher band than one
-  // just over it (4.01) — the displayed number and the banding decision are
-  // deliberately not the same calculation.
-  average_rating: number | null;
+  // Raw average (e.g. 4.3), shown as-is.
+  average: number | null;
+  // Math.round(average) — used for banding instead of the raw average, so a
+  // score just under a threshold (e.g. 3.98) isn't banded any harsher than
+  // one just over it (4.01). Computed server-side now, not locally.
+  rounded: number | null;
+  rating_count: number;
   feedback: DashboardFeedbackEntry[];
 }
 
 export interface DashboardStats {
-  event_id: string;
-  event_name: string;
   attendance: DashboardAttendanceStats;
   rsvp: DashboardRsvpStats;
   rating: DashboardRatingStats;
-}
-
-// GET /api/dashboard/default's success shape — bundles the winning event's
-// stats directly so the initial paint doesn't need a second round-trip once
-// the two dropdowns are pre-selected to event_type_id/event_id.
-export interface DefaultDashboard {
-  event_type_id: string;
-  event_type_name: string;
-  event_id: string;
-  event_name: string;
-  stats: DashboardStats;
 }

@@ -6,8 +6,7 @@ import {
   listEventsForType,
   listEventTypes,
 } from "@/src/features/dashboard/services/dashboard.service";
-import type { DashboardEventOption, DashboardStats } from "@/src/features/dashboard/types";
-import type { EventType } from "@/src/features/event-types/types";
+import type { DashboardEventOption, DashboardEventType, DashboardStats } from "@/src/features/dashboard/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -21,6 +20,7 @@ function formatEventOptionLabel(option: DashboardEventOption): string {
   const datePrefix = new Date(option.start_datetime).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
   return `${datePrefix} — ${option.name}`;
 }
@@ -33,12 +33,11 @@ function rateBandColor(colors: ThemeColors, ratio: number): string {
   return colors.danger;
 }
 
-// Bands on the rating rounded to the nearest whole star, deliberately
-// separate from the raw average this card displays as text (e.g. a 3.98
-// isn't banded any harsher than a 4.01) — see DashboardRatingStats.average_rating.
-function ratingBandColor(colors: ThemeColors, averageRating: number | null): string {
-  if (averageRating === null) return colors.textMuted;
-  const rounded = Math.round(averageRating);
+// Bands on `rounded` (server-computed Math.round(average)), deliberately
+// separate from the raw `average` this card displays as text (e.g. a 3.98
+// isn't banded any harsher than a 4.01) — see DashboardRatingStats in types.ts.
+function ratingBandColor(colors: ThemeColors, rounded: number | null): string {
+  if (rounded === null) return colors.textMuted;
   if (rounded >= 4) return colors.success;
   if (rounded === 3) return colors.warning;
   return colors.danger;
@@ -62,7 +61,6 @@ function getThemedStyles(colors: ThemeColors) {
     optionRowSelected: { backgroundColor: colors.backgroundSecondary },
     optionLabel: { color: colors.text },
     optionLabelSelected: { color: colors.accent },
-    feedbackName: { color: colors.text },
     feedbackText: { color: colors.textSecondary },
     feedbackEmpty: { color: colors.textMuted },
   });
@@ -141,48 +139,56 @@ function DropdownField<T>({
 function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnType<typeof getThemedStyles> }) {
   const colors = useThemeColors();
 
-  const attendancePct = Math.round(stats.attendance.attendance_rate * 100);
-  const attendanceColor = rateBandColor(colors, stats.attendance.attendance_rate);
+  const attendancePercent = stats.attendance.percent;
+  const attendanceColor =
+    attendancePercent !== null ? rateBandColor(colors, attendancePercent / 100) : colors.textMuted;
 
-  const rsvpRate = stats.rsvp.total_invited > 0 ? stats.rsvp.yes_count / stats.rsvp.total_invited : 0;
-  const rsvpColor = rateBandColor(colors, rsvpRate);
+  const rsvpTotal =
+    stats.rsvp.yes_count + stats.rsvp.no_count + stats.rsvp.tentative_count + stats.rsvp.no_response_count;
+  const rsvpRate = rsvpTotal > 0 ? stats.rsvp.yes_count / rsvpTotal : 0;
+  const rsvpColor = rsvpTotal > 0 ? rateBandColor(colors, rsvpRate) : colors.textMuted;
 
-  const ratingColor = ratingBandColor(colors, stats.rating.average_rating);
+  const ratingColor = ratingBandColor(colors, stats.rating.rounded);
 
   return (
     <View style={styles.cards}>
       <View style={[styles.card, { backgroundColor: attendanceColor + "1a", borderColor: attendanceColor + "44" }]}>
         <Text style={[styles.cardTitle, themed.cardTitle]}>Attendance</Text>
-        <Text style={[styles.cardStat, { color: attendanceColor }]}>{attendancePct}%</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>
-          {stats.attendance.attended_count} of {stats.attendance.expected_count} expected
+        <Text style={[styles.cardStat, { color: attendanceColor }]}>
+          {attendancePercent !== null ? `${attendancePercent}%` : "—"}
         </Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Attended: {stats.attendance.attended_count}</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Did Not Attend: {stats.attendance.did_not_attend_count}</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>
+          Did Not Self-Report: {stats.attendance.did_not_self_report_count}
+        </Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {stats.attendance.expected_count}</Text>
       </View>
 
       <View style={[styles.card, { backgroundColor: rsvpColor + "1a", borderColor: rsvpColor + "44" }]}>
         <Text style={[styles.cardTitle, themed.cardTitle]}>RSVP</Text>
-        <Text style={[styles.cardStat, { color: rsvpColor }]}>{stats.rsvp.yes_count} yes</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>
-          {stats.rsvp.no_count} no · {stats.rsvp.no_response_count} no response · {stats.rsvp.total_invited} invited
-        </Text>
+        <Text style={[styles.cardStat, { color: rsvpColor }]}>{stats.rsvp.yes_count} accepted</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Accepted: {stats.rsvp.yes_count}</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Declined: {stats.rsvp.no_count}</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Tentative: {stats.rsvp.tentative_count}</Text>
+        <Text style={[styles.cardMeta, themed.cardMeta]}>Did Not Respond: {stats.rsvp.no_response_count}</Text>
       </View>
 
       <View style={[styles.card, { backgroundColor: ratingColor + "1a", borderColor: ratingColor + "44" }]}>
         <Text style={[styles.cardTitle, themed.cardTitle]}>Rating & Feedback</Text>
         <Text style={[styles.cardStat, { color: ratingColor }]}>
-          {stats.rating.average_rating !== null ? stats.rating.average_rating.toFixed(1) : "—"}
+          {stats.rating.average !== null ? stats.rating.average.toFixed(1) : "—"}
         </Text>
         <Text style={[styles.cardMeta, themed.cardMeta]}>
-          {stats.rating.feedback.length} feedback submission{stats.rating.feedback.length === 1 ? "" : "s"}
+          {stats.rating.rating_count} rating{stats.rating.rating_count === 1 ? "" : "s"}
         </Text>
         {stats.rating.feedback.length > 0 ? (
           <View style={styles.feedbackList}>
             {stats.rating.feedback.map((entry, index) => (
-              <View key={`${entry.member_name}-${index}`} style={styles.feedbackRow}>
-                <Text style={[styles.feedbackName, themed.feedbackName]}>
-                  {entry.member_name}
-                  {entry.star_rating !== null ? ` — ${entry.star_rating}★` : ""}
-                </Text>
+              <View key={index} style={styles.feedbackRow}>
+                {entry.star_rating !== null ? (
+                  <Text style={[styles.cardMeta, themed.cardMeta]}>{entry.star_rating}★</Text>
+                ) : null}
                 <Text style={[styles.feedbackText, themed.feedbackText]}>{entry.feedback}</Text>
               </View>
             ))}
@@ -203,8 +209,8 @@ export default function DashboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hasAnyEvents, setHasAnyEvents] = useState(true);
 
-  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
-  const [selectedEventType, setSelectedEventType] = useState<EventType | null>(null);
+  const [eventTypes, setEventTypes] = useState<DashboardEventType[]>([]);
+  const [selectedEventType, setSelectedEventType] = useState<DashboardEventType | null>(null);
 
   const [events, setEvents] = useState<DashboardEventOption[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<DashboardEventOption | null>(null);
@@ -231,28 +237,18 @@ export default function DashboardScreen() {
         }
 
         setHasAnyEvents(true);
+        setSelectedEventType(defaultDashboard.event_type);
+        setSelectedEvent(defaultDashboard.event);
 
-        const matchingType =
-          types.find((t) => t.id === defaultDashboard.event_type_id) ??
-          ({ id: defaultDashboard.event_type_id, name: defaultDashboard.event_type_name } as EventType);
-        setSelectedEventType(matchingType);
-
-        const typeEvents = await listEventsForType(defaultDashboard.event_type_id);
+        // getDefaultDashboard() doesn't bundle stats (see DefaultDashboardEvent
+        // in types.ts) — fetched alongside the Event dropdown's own options.
+        const [typeEvents, initialStats] = await Promise.all([
+          listEventsForType(defaultDashboard.event_type.id),
+          getDashboardStats(defaultDashboard.event.id),
+        ]);
         if (isCancelled) return;
         setEvents(typeEvents);
-
-        // Falls back to a synthesized option (blank date prefix) only if the
-        // default event is somehow missing from its own type's event list —
-        // shouldn't happen, but avoids a crash if the two endpoints disagree.
-        const matchingEvent =
-          typeEvents.find((e) => e.id === defaultDashboard.event_id) ??
-          ({
-            id: defaultDashboard.event_id,
-            name: defaultDashboard.event_name,
-            start_datetime: "",
-          } as DashboardEventOption);
-        setSelectedEvent(matchingEvent);
-        setStats(defaultDashboard.stats);
+        setStats(initialStats);
       } catch (err) {
         if (!isCancelled) setError(err instanceof Error ? err.message : "Failed to load the dashboard.");
       } finally {
@@ -266,7 +262,7 @@ export default function DashboardScreen() {
     };
   }, []);
 
-  const handleSelectEventType = async (eventType: EventType) => {
+  const handleSelectEventType = async (eventType: DashboardEventType) => {
     setSelectedEventType(eventType);
     setSelectedEvent(null);
     setStats(null);
@@ -441,10 +437,6 @@ const styles = StyleSheet.create({
   },
   feedbackRow: {
     gap: 2,
-  },
-  feedbackName: {
-    fontSize: 13,
-    fontWeight: "700",
   },
   feedbackText: {
     fontSize: 13,
