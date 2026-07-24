@@ -182,31 +182,40 @@ function DropdownField<T>({
   );
 }
 
-// DIP-FP-182-mobile-adj-3: five-view cycle for the RSVP card's tappable
-// headline. "Responded" combines the three actual-response counts
-// (accepted+declined+tentative), deliberately excluding Did Not Respond.
-const RSVP_CYCLE = ["ACCEPTED", "RESPONDED", "DECLINED", "TENTATIVE", "NO_RESPONSE"] as const;
+// DIP-FP-182-mobile-adj-4: Responded-first order, per Joseph's exact
+// wording — replaces adj-3's Accepted-first order entirely. "Responded"
+// combines the three actual-response counts (accepted+declined+tentative),
+// deliberately excluding Not Responded.
+const RSVP_CYCLE = ["RESPONDED", "ACCEPTED", "DECLINED", "TENTATIVE", "NO_RESPONSE"] as const;
 type RsvpCycleView = (typeof RSVP_CYCLE)[number];
 
+// DIP-FP-182-mobile-adj-4: percentages, not raw counts — adj-3's own DIP
+// text specified percentages and this was missed in review; corrected here.
+// total is the sum of all four raw counts, same denominator concept as
+// rsvpMax below, just not previously applied to the headline. "—" when
+// total is 0, same guard pattern as attendancePercent's null case.
 function rsvpHeadline(view: RsvpCycleView, rsvp: DashboardStats["rsvp"]): string {
+  const total = rsvp.yes_count + rsvp.no_count + rsvp.tentative_count + rsvp.no_response_count;
+  const pct = (value: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : "—");
+
   switch (view) {
-    case "ACCEPTED":
-      return `${rsvp.yes_count} accepted`;
     case "RESPONDED":
-      return `${rsvp.yes_count + rsvp.no_count + rsvp.tentative_count} responded`;
+      return `${pct(rsvp.yes_count + rsvp.no_count + rsvp.tentative_count)} responded`;
+    case "ACCEPTED":
+      return `${pct(rsvp.yes_count)} accepted`;
     case "DECLINED":
-      return `${rsvp.no_count} declined`;
+      return `${pct(rsvp.no_count)} declined`;
     case "TENTATIVE":
-      return `${rsvp.tentative_count} tentative`;
+      return `${pct(rsvp.tentative_count)} tentative`;
     case "NO_RESPONSE":
-      return `${rsvp.no_response_count} did not respond`;
+      return `${pct(rsvp.no_response_count)} not responded`;
   }
 }
 
 function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnType<typeof getThemedStyles> }) {
   const colors = useThemeColors();
 
-  // Resets to "Accepted" whenever the selected event changes: StatsCards is
+  // Resets to "Responded" (index 0) whenever the selected event changes: StatsCards is
   // only ever mounted while `stats` is already loaded (DashboardScreen swaps
   // in an ActivityIndicator during isLoadingStats instead of keeping this
   // component alive), so a new event selection always remounts this
@@ -329,7 +338,13 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
               {stats.rating.feedback.map((entry, index) => (
                 <View key={index} style={styles.feedbackRow}>
                   {entry.star_rating !== null ? (
-                    <Text style={[styles.cardMeta, themed.cardMeta]}>{"★".repeat(entry.star_rating)}</Text>
+                    // DIP-FP-182-mobile-adj-4: same starBarColor() call as
+                    // the Rating card's bar rows above, not a second
+                    // hardcoded color list — guarantees this can't drift out
+                    // of sync with the bar-row colors.
+                    <Text style={[styles.cardMeta, { color: starBarColor(colors, entry.star_rating) }]}>
+                      {"★".repeat(entry.star_rating)}
+                    </Text>
                   ) : null}
                   <Text style={[styles.feedbackText, themed.feedbackText]}>{`"${entry.feedback}"`}</Text>
                 </View>
