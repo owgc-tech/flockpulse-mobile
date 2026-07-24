@@ -53,6 +53,11 @@ export interface DashboardFeedbackEntry {
   feedback: string;
 }
 
+export interface DashboardRatingBreakdownEntry {
+  star: number;
+  count: number;
+}
+
 export interface DashboardRatingStats {
   // Raw average (e.g. 4.3), shown as-is.
   average: number | null;
@@ -61,6 +66,11 @@ export interface DashboardRatingStats {
   // one just over it (4.01). Computed server-side now, not locally.
   rounded: number | null;
   rating_count: number;
+  // DIP-FP-182-mobile-adj-2 / DIP-FP-182-web-adj-2: one entry per star value
+  // 5 down to 1, driving the Rating card's bar rows. Depends on
+  // DIP-FP-182-web-adj-2 landing — not present in the field yet as of this
+  // DIP, per its own Grounding Check.
+  breakdown: DashboardRatingBreakdownEntry[];
   feedback: DashboardFeedbackEntry[];
 }
 

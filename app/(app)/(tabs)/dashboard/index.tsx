@@ -43,6 +43,46 @@ function ratingBandColor(colors: ThemeColors, rounded: number | null): string {
   return colors.danger;
 }
 
+// DIP-FP-182-mobile-adj-2: green-to-red gradient for the Rating card's five
+// bar rows — alpha-blended from the existing three semantic colors (success/
+// warning/danger), not new raw hex values. "b3" (~70% alpha) is the same
+// suffix convention used for pale-tint card backgrounds elsewhere in this
+// file, just at a stronger opacity since these are solid bar fills, not tints.
+function starBarColor(colors: ThemeColors, star: number): string {
+  switch (star) {
+    case 5:
+      return colors.success;
+    case 4:
+      return colors.success + "b3";
+    case 3:
+      return colors.warning;
+    case 2:
+      return colors.danger + "b3";
+    default:
+      return colors.danger;
+  }
+}
+
+const STAR_ORDER = [5, 4, 3, 2, 1];
+
+// One row = colored label+count on the left, a horizontal bar on the right
+// scaled against the largest count in the same card. The track (low-opacity
+// version of the bar color) keeps a 0-width bar visually anchored instead of
+// disappearing entirely.
+function BarRow({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
+  const widthPct = max > 0 ? (count / max) * 100 : 0;
+  return (
+    <View style={styles.barRow}>
+      <Text style={[styles.barLabel, { color }]} numberOfLines={1}>
+        {label}: {count}
+      </Text>
+      <View style={[styles.barTrack, { backgroundColor: color + "22" }]}>
+        <View style={[styles.barFill, { width: `${widthPct}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
 function getThemedStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { backgroundColor: colors.background },
@@ -150,6 +190,22 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
 
   const ratingColor = ratingBandColor(colors, stats.rating.rounded);
 
+  const attendanceMax = Math.max(
+    stats.attendance.attended_count,
+    stats.attendance.did_not_attend_count,
+    stats.attendance.did_not_self_report_count
+  );
+
+  const rsvpMax = Math.max(
+    stats.rsvp.yes_count,
+    stats.rsvp.no_count,
+    stats.rsvp.tentative_count,
+    stats.rsvp.no_response_count
+  );
+
+  const breakdownByStar = new Map(stats.rating.breakdown.map((entry) => [entry.star, entry.count]));
+  const ratingMax = Math.max(0, ...STAR_ORDER.map((star) => breakdownByStar.get(star) ?? 0));
+
   return (
     <View style={styles.cards}>
       <View style={[styles.card, { backgroundColor: attendanceColor + "1a", borderColor: attendanceColor + "44" }]}>
@@ -157,21 +213,38 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
         <Text style={[styles.cardStat, { color: attendanceColor }]}>
           {attendancePercent !== null ? `${attendancePercent}%` : "—"}
         </Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Attended: {stats.attendance.attended_count}</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Did Not Attend: {stats.attendance.did_not_attend_count}</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>
-          Did Not Self-Report: {stats.attendance.did_not_self_report_count}
-        </Text>
         <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {stats.attendance.expected_count}</Text>
+        <View style={styles.barList}>
+          <BarRow label="Attended" count={stats.attendance.attended_count} max={attendanceMax} color={colors.success} />
+          <BarRow
+            label="Did Not Attend"
+            count={stats.attendance.did_not_attend_count}
+            max={attendanceMax}
+            color={colors.danger}
+          />
+          <BarRow
+            label="Did Not Self-Report"
+            count={stats.attendance.did_not_self_report_count}
+            max={attendanceMax}
+            color={colors.warning}
+          />
+        </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: rsvpColor + "1a", borderColor: rsvpColor + "44" }]}>
         <Text style={[styles.cardTitle, themed.cardTitle]}>RSVP</Text>
         <Text style={[styles.cardStat, { color: rsvpColor }]}>{stats.rsvp.yes_count} accepted</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Accepted: {stats.rsvp.yes_count}</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Declined: {stats.rsvp.no_count}</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Tentative: {stats.rsvp.tentative_count}</Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Did Not Respond: {stats.rsvp.no_response_count}</Text>
+        <View style={styles.barList}>
+          <BarRow label="Accepted" count={stats.rsvp.yes_count} max={rsvpMax} color={colors.success} />
+          <BarRow label="Declined" count={stats.rsvp.no_count} max={rsvpMax} color={colors.danger} />
+          <BarRow label="Tentative" count={stats.rsvp.tentative_count} max={rsvpMax} color={colors.warning} />
+          <BarRow
+            label="Did Not Respond"
+            count={stats.rsvp.no_response_count}
+            max={rsvpMax}
+            color={colors.textMuted}
+          />
+        </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: ratingColor + "1a", borderColor: ratingColor + "44" }]}>
@@ -182,6 +255,17 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
         <Text style={[styles.cardMeta, themed.cardMeta]}>
           {stats.rating.rating_count} rating{stats.rating.rating_count === 1 ? "" : "s"}
         </Text>
+        <View style={styles.barList}>
+          {STAR_ORDER.map((star) => (
+            <BarRow
+              key={star}
+              label={`${star}★`}
+              count={breakdownByStar.get(star) ?? 0}
+              max={ratingMax}
+              color={starBarColor(colors, star)}
+            />
+          ))}
+        </View>
         {stats.rating.feedback.length > 0 ? (
           <View style={styles.feedbackList}>
             {stats.rating.feedback.map((entry, index) => (
@@ -430,6 +514,30 @@ const styles = StyleSheet.create({
   cardMeta: {
     fontSize: 13,
     marginTop: 4,
+  },
+  barList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  barRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  barLabel: {
+    width: 132,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  barTrack: {
+    flex: 1,
+    height: 10,
+    borderRadius: 5,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 5,
   },
   feedbackList: {
     marginTop: 12,

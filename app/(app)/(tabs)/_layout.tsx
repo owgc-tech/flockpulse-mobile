@@ -101,31 +101,25 @@ export default function TabsLayout() {
   // tabBarActiveTintColor/tabBarInactiveTintColor (the default renderer's
   // own styling hooks) are now redundant and removed; the custom tab bar
   // owns all of that.
+  // DIP-FP-182-mobile-adj-2: Events/Check-In/Board/Confirm/Tasks order,
+  // Board centered — reverts DIP-FP-182-mobile-adj-1's initialRouteName
+  // override entirely (no prop = expo-router's default, the first-declared
+  // screen below, which is index/Events) per Joseph's explicit call that
+  // landing-page priority isn't worth a conflict with wanting Board
+  // centered. All five labels shortened in the same pass (the original
+  // screenshot already showed "Confirmations" truncating even before Board
+  // existed) — icon/font sizing deliberately untouched this round.
   return (
     <Tabs
       tabBar={(props) => <AnimatedTabBar {...props} />}
-      // DIP-FP-182-mobile-adj-1: the story's own confirmed decision is that
-      // Dashboard is the landing route, not My Events — corrects the first
-      // draft, which pinned initialRouteName to "index" instead.
-      initialRouteName="dashboard/index"
       screenOptions={{
         headerShown: false,
       }}
     >
       <Tabs.Screen
-        name="dashboard/index"
-        options={{
-          // Icon-only tab (see AnimatedTabBar's ALWAYS_ACCENT_ROUTES) — no
-          // role gating, per this DIP's Grounding Check: visibility is
-          // entirely a function of what the dashboard API returns, not
-          // conditional logic here.
-          tabBarLabel: "",
-        }}
-      />
-      <Tabs.Screen
         name="index"
         options={{
-          tabBarLabel: "My Events",
+          tabBarLabel: "Events",
           // DIP-FP-165: events with no RSVP response yet, RSVP still open —
           // count computed locally in index.tsx (see its own comments),
           // synced into this same module-level-store/OS-badge pattern as
@@ -134,33 +128,42 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="self-report/index"
+        options={{
+          tabBarLabel: "Check-In",
+          // No href gating — visible to every role, unlike Confirmations.
+          tabBarBadge: pendingSelfReportCount > 0 ? pendingSelfReportCount : undefined,
+        }}
+      />
+      <Tabs.Screen
+        name="dashboard/index"
+        options={{
+          tabBarLabel: "Board",
+          // No role gating, per this DIP's Grounding Check: visibility is
+          // entirely a function of what the dashboard API returns, not
+          // conditional logic here.
+        }}
+      />
+      <Tabs.Screen
+        name="confirmations/index"
+        options={{
+          tabBarLabel: "Confirm",
+          href: showConfirmations ? undefined : null,
+          // undefined (not 0) when there's nothing pending — Tabs.Screen
+          // renders a bare dot for any defined badge value, including 0.
+          tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
+        }}
+      />
+      <Tabs.Screen
         name="my-tasks/index"
         options={{
-          tabBarLabel: "My Tasks",
+          tabBarLabel: "Tasks",
           // DIP-FP-161-5-my-tasks-tab: no href gating — task assignments
           // aren't role-scoped (any member can be individually or
           // group-assigned a task). DIP-FP-164 superseded that DIP's
           // original "no badge" decision — badge added, mirroring
           // Confirmations/Self-Report's exact pattern.
           tabBarBadge: pendingMyTasksCount > 0 ? pendingMyTasksCount : undefined,
-        }}
-      />
-      <Tabs.Screen
-        name="self-report/index"
-        options={{
-          tabBarLabel: "Self-Report",
-          // No href gating — visible to every role, unlike Confirmations.
-          tabBarBadge: pendingSelfReportCount > 0 ? pendingSelfReportCount : undefined,
-        }}
-      />
-      <Tabs.Screen
-        name="confirmations/index"
-        options={{
-          tabBarLabel: "Confirmations",
-          href: showConfirmations ? undefined : null,
-          // undefined (not 0) when there's nothing pending — Tabs.Screen
-          // renders a bare dot for any defined badge value, including 0.
-          tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
         }}
       />
     </Tabs>
