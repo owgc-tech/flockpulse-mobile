@@ -92,7 +92,7 @@ function getThemedStyles(colors: ThemeColors) {
     placeholderText: { color: colors.textMuted },
     empty: { color: colors.textSecondary },
     error: { color: colors.danger },
-    cardTitle: { color: colors.text },
+    sectionHeading: { color: colors.text },
     cardMeta: { color: colors.textSecondary },
     modalContainer: { backgroundColor: colors.background },
     modalTitle: { color: colors.text },
@@ -108,6 +108,11 @@ function getThemedStyles(colors: ThemeColors) {
 
 interface DropdownFieldProps<T> {
   label: string;
+  // DIP-FP-182-mobile-adj-3: separate from `label` so the Modal sheet still
+  // has a meaningful title ("Event Type"/"Event") even now that `label`
+  // itself is "" on the field caption (see the shared "Events" heading
+  // above both DropdownFields). Falls back to `label` when omitted.
+  modalTitle?: string;
   value: T | null;
   options: T[];
   keyExtractor: (item: T) => string;
@@ -122,6 +127,7 @@ interface DropdownFieldProps<T> {
 // convention exactly (same shape, no course/module drill-down needed here).
 function DropdownField<T>({
   label,
+  modalTitle,
   value,
   options,
   keyExtractor,
@@ -134,7 +140,7 @@ function DropdownField<T>({
 
   return (
     <View style={styles.field}>
-      <Text style={[styles.label, themed.label]}>{label}</Text>
+      {label ? <Text style={[styles.label, themed.label]}>{label}</Text> : null}
       <Pressable style={[styles.input, themed.input]} onPress={() => setIsOpen(true)} testID={`${testID}-open`}>
         <Text style={value ? themed.inputText : themed.placeholderText}>
           {value ? renderLabel(value) : "Select…"}
@@ -144,7 +150,7 @@ function DropdownField<T>({
       <Modal visible={isOpen} animationType="slide" onRequestClose={() => setIsOpen(false)}>
         <View style={[styles.modalContainer, themed.modalContainer]}>
           <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, themed.modalTitle]}>{label}</Text>
+            <Text style={[styles.modalTitle, themed.modalTitle]}>{modalTitle ?? label}</Text>
             <Pressable onPress={() => setIsOpen(false)} testID={`${testID}-close`}>
               <Text style={[styles.doneText, themed.doneText]}>Done</Text>
             </Pressable>
@@ -176,8 +182,38 @@ function DropdownField<T>({
   );
 }
 
+// DIP-FP-182-mobile-adj-3: five-view cycle for the RSVP card's tappable
+// headline. "Responded" combines the three actual-response counts
+// (accepted+declined+tentative), deliberately excluding Did Not Respond.
+const RSVP_CYCLE = ["ACCEPTED", "RESPONDED", "DECLINED", "TENTATIVE", "NO_RESPONSE"] as const;
+type RsvpCycleView = (typeof RSVP_CYCLE)[number];
+
+function rsvpHeadline(view: RsvpCycleView, rsvp: DashboardStats["rsvp"]): string {
+  switch (view) {
+    case "ACCEPTED":
+      return `${rsvp.yes_count} accepted`;
+    case "RESPONDED":
+      return `${rsvp.yes_count + rsvp.no_count + rsvp.tentative_count} responded`;
+    case "DECLINED":
+      return `${rsvp.no_count} declined`;
+    case "TENTATIVE":
+      return `${rsvp.tentative_count} tentative`;
+    case "NO_RESPONSE":
+      return `${rsvp.no_response_count} did not respond`;
+  }
+}
+
 function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnType<typeof getThemedStyles> }) {
   const colors = useThemeColors();
+
+  // Resets to "Accepted" whenever the selected event changes: StatsCards is
+  // only ever mounted while `stats` is already loaded (DashboardScreen swaps
+  // in an ActivityIndicator during isLoadingStats instead of keeping this
+  // component alive), so a new event selection always remounts this
+  // component fresh rather than carrying the old cycle position forward.
+  const [rsvpCycleIndex, setRsvpCycleIndex] = useState(0);
+  const rsvpView = RSVP_CYCLE[rsvpCycleIndex];
+  const handleRsvpTap = () => setRsvpCycleIndex((i) => (i + 1) % RSVP_CYCLE.length);
 
   const attendancePercent = stats.attendance.percent;
   const attendanceColor =
@@ -208,78 +244,101 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
 
   return (
     <View style={styles.cards}>
-      <View style={[styles.card, { backgroundColor: attendanceColor + "1a", borderColor: attendanceColor + "44" }]}>
-        <Text style={[styles.cardTitle, themed.cardTitle]}>Attendance</Text>
-        <Text style={[styles.cardStat, { color: attendanceColor }]}>
-          {attendancePercent !== null ? `${attendancePercent}%` : "—"}
-        </Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {stats.attendance.expected_count}</Text>
-        <View style={styles.barList}>
-          <BarRow label="Attended" count={stats.attendance.attended_count} max={attendanceMax} color={colors.success} />
-          <BarRow
-            label="Did Not Attend"
-            count={stats.attendance.did_not_attend_count}
-            max={attendanceMax}
-            color={colors.danger}
-          />
-          <BarRow
-            label="Did Not Self-Report"
-            count={stats.attendance.did_not_self_report_count}
-            max={attendanceMax}
-            color={colors.warning}
-          />
+      <View style={[styles.card, { borderColor: attendanceColor + "44" }]}>
+        <View style={[styles.cardHeaderBar, { backgroundColor: attendanceColor }]}>
+          <Text style={styles.cardHeaderText}>Attendance</Text>
         </View>
-      </View>
-
-      <View style={[styles.card, { backgroundColor: rsvpColor + "1a", borderColor: rsvpColor + "44" }]}>
-        <Text style={[styles.cardTitle, themed.cardTitle]}>RSVP</Text>
-        <Text style={[styles.cardStat, { color: rsvpColor }]}>{stats.rsvp.yes_count} accepted</Text>
-        <View style={styles.barList}>
-          <BarRow label="Accepted" count={stats.rsvp.yes_count} max={rsvpMax} color={colors.success} />
-          <BarRow label="Declined" count={stats.rsvp.no_count} max={rsvpMax} color={colors.danger} />
-          <BarRow label="Tentative" count={stats.rsvp.tentative_count} max={rsvpMax} color={colors.warning} />
-          <BarRow
-            label="Did Not Respond"
-            count={stats.rsvp.no_response_count}
-            max={rsvpMax}
-            color={colors.textMuted}
-          />
-        </View>
-      </View>
-
-      <View style={[styles.card, { backgroundColor: ratingColor + "1a", borderColor: ratingColor + "44" }]}>
-        <Text style={[styles.cardTitle, themed.cardTitle]}>Rating & Feedback</Text>
-        <Text style={[styles.cardStat, { color: ratingColor }]}>
-          {stats.rating.average !== null ? stats.rating.average.toFixed(1) : "—"}
-        </Text>
-        <Text style={[styles.cardMeta, themed.cardMeta]}>
-          {stats.rating.rating_count} rating{stats.rating.rating_count === 1 ? "" : "s"}
-        </Text>
-        <View style={styles.barList}>
-          {STAR_ORDER.map((star) => (
+        <View style={[styles.cardBody, { backgroundColor: attendanceColor + "1a" }]}>
+          <Text style={[styles.cardStat, { color: attendanceColor }]}>
+            {attendancePercent !== null ? `${attendancePercent}%` : "—"}
+          </Text>
+          <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {stats.attendance.expected_count}</Text>
+          <View style={styles.barList}>
             <BarRow
-              key={star}
-              label={`${star}★`}
-              count={breakdownByStar.get(star) ?? 0}
-              max={ratingMax}
-              color={starBarColor(colors, star)}
+              label="Attended"
+              count={stats.attendance.attended_count}
+              max={attendanceMax}
+              color={colors.success}
             />
-          ))}
+            <BarRow
+              label="Did Not Attend"
+              count={stats.attendance.did_not_attend_count}
+              max={attendanceMax}
+              color={colors.danger}
+            />
+            <BarRow
+              label="Did Not Self-Report"
+              count={stats.attendance.did_not_self_report_count}
+              max={attendanceMax}
+              color={colors.warning}
+            />
+          </View>
         </View>
-        {stats.rating.feedback.length > 0 ? (
-          <View style={styles.feedbackList}>
-            {stats.rating.feedback.map((entry, index) => (
-              <View key={index} style={styles.feedbackRow}>
-                {entry.star_rating !== null ? (
-                  <Text style={[styles.cardMeta, themed.cardMeta]}>{entry.star_rating}★</Text>
-                ) : null}
-                <Text style={[styles.feedbackText, themed.feedbackText]}>{entry.feedback}</Text>
-              </View>
+      </View>
+
+      <View style={[styles.card, { borderColor: rsvpColor + "44" }]}>
+        <View style={[styles.cardHeaderBar, { backgroundColor: rsvpColor }]}>
+          <Text style={styles.cardHeaderText}>RSVP</Text>
+        </View>
+        <View style={[styles.cardBody, { backgroundColor: rsvpColor + "1a" }]}>
+          {/* DIP-FP-182-mobile-adj-3: tappable, cycles through five views —
+              color stays fixed to rsvpColor throughout (only the number/
+              label changes), and resets to Accepted on remount (see
+              rsvpCycleIndex's own comment above). */}
+          <Pressable onPress={handleRsvpTap} testID="dashboard-rsvp-cycle">
+            <Text style={[styles.cardStat, { color: rsvpColor }]}>{rsvpHeadline(rsvpView, stats.rsvp)}</Text>
+          </Pressable>
+          <View style={styles.barList}>
+            <BarRow label="Accepted" count={stats.rsvp.yes_count} max={rsvpMax} color={colors.success} />
+            <BarRow label="Declined" count={stats.rsvp.no_count} max={rsvpMax} color={colors.danger} />
+            <BarRow label="Tentative" count={stats.rsvp.tentative_count} max={rsvpMax} color={colors.warning} />
+            <BarRow
+              label="Did Not Respond"
+              count={stats.rsvp.no_response_count}
+              max={rsvpMax}
+              color={colors.textMuted}
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={[styles.card, { borderColor: ratingColor + "44" }]}>
+        <View style={[styles.cardHeaderBar, { backgroundColor: ratingColor }]}>
+          <Text style={styles.cardHeaderText}>Rating & Feedback</Text>
+        </View>
+        <View style={[styles.cardBody, { backgroundColor: ratingColor + "1a" }]}>
+          <Text style={[styles.cardStat, { color: ratingColor }]}>
+            {stats.rating.average !== null ? stats.rating.average.toFixed(1) : "—"}
+          </Text>
+          <Text style={[styles.cardMeta, themed.cardMeta]}>
+            {stats.rating.rating_count} rating{stats.rating.rating_count === 1 ? "" : "s"}
+          </Text>
+          <View style={styles.barList}>
+            {STAR_ORDER.map((star) => (
+              <BarRow
+                key={star}
+                label={`${star}★`}
+                count={breakdownByStar.get(star) ?? 0}
+                max={ratingMax}
+                color={starBarColor(colors, star)}
+              />
             ))}
           </View>
-        ) : (
-          <Text style={[styles.feedbackEmpty, themed.feedbackEmpty]}>No feedback submitted yet.</Text>
-        )}
+          {stats.rating.feedback.length > 0 ? (
+            <View style={styles.feedbackList}>
+              {stats.rating.feedback.map((entry, index) => (
+                <View key={index} style={styles.feedbackRow}>
+                  {entry.star_rating !== null ? (
+                    <Text style={[styles.cardMeta, themed.cardMeta]}>{"★".repeat(entry.star_rating)}</Text>
+                  ) : null}
+                  <Text style={[styles.feedbackText, themed.feedbackText]}>{`"${entry.feedback}"`}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={[styles.feedbackEmpty, themed.feedbackEmpty]}>No feedback submitted yet.</Text>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -404,8 +463,18 @@ export default function DashboardScreen() {
     <ScrollView style={[styles.container, themed.container]} contentContainerStyle={styles.content}>
       {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
 
+      {/* DIP-FP-182-mobile-adj-3: one shared heading replaces the "Event
+          Type" field label entirely; the "Event" field's own label is
+          dropped too (stacking "Events" directly above "Event" would read
+          as redundant) — the fixed type-then-event order and each field's
+          placeholder/value text stay self-explanatory without individual
+          labels. Each field's Modal sheet keeps its own distinct title via
+          modalTitle, so the picker itself isn't ambiguous either. */}
+      <Text style={[styles.sectionHeading, themed.sectionHeading]}>Events</Text>
+
       <DropdownField
-        label="Event Type"
+        label=""
+        modalTitle="Event Type"
         value={selectedEventType}
         options={eventTypes}
         keyExtractor={(item) => item.id}
@@ -416,7 +485,8 @@ export default function DashboardScreen() {
       />
 
       <DropdownField
-        label="Event"
+        label=""
+        modalTitle="Event"
         value={selectedEvent}
         options={events}
         keyExtractor={(item) => item.id}
@@ -445,6 +515,11 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 8,
   },
   field: {
     marginBottom: 16,
@@ -500,11 +575,24 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: 16,
+    overflow: "hidden",
   },
-  cardTitle: {
+  // DIP-FP-182-mobile-adj-3: the title used to be plain colored text inside
+  // `card`'s own padding; it now sits on its own full-strength-color strip
+  // above the (still pale-tinted) body — `card` lost its padding/background
+  // so this bar can run edge-to-edge and get clipped to the card's own
+  // rounded corners via `overflow: hidden` above.
+  cardHeaderBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  cardHeaderText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: "#fff",
+  },
+  cardBody: {
+    padding: 16,
   },
   cardStat: {
     fontSize: 28,
@@ -545,9 +633,14 @@ const styles = StyleSheet.create({
   },
   feedbackRow: {
     gap: 2,
+    // ~3 character-widths at this font size — a fixed padding indents
+    // predictably regardless of font, unlike literal leading spaces in a
+    // proportional font (per this DIP's own Grounding Check).
+    paddingLeft: 24,
   },
   feedbackText: {
     fontSize: 13,
+    fontStyle: "italic",
   },
   feedbackEmpty: {
     fontSize: 13,
