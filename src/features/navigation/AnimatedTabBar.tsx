@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BottomTabBarProps, BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
-import { Calendar, CircleCheck, ClipboardCheck, ListChecks } from "lucide-react-native";
+import { Calendar, ChartColumn, CircleCheck, ClipboardCheck, ListChecks } from "lucide-react-native";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import { darkColors } from "@/src/theme/colors";
 
@@ -18,6 +18,7 @@ import { darkColors } from "@/src/theme/colors";
 // lucide-react-native version renamed it under lucide's noun-first
 // convention; same icon, same intent.
 const ROUTE_ICONS: Record<string, typeof Calendar> = {
+  "dashboard/index": ChartColumn,
   index: Calendar,
   "confirmations/index": CircleCheck,
   "self-report/index": ClipboardCheck,
@@ -26,6 +27,12 @@ const ROUTE_ICONS: Record<string, typeof Calendar> = {
   // "tasks" specifically rather than a generic completion mark.
   "my-tasks/index": ListChecks,
 };
+
+// DIP-FP-182-mobile: Dashboard has no label (icon-only tab) and its icon
+// stays accent-colored regardless of focus, unlike every other tab here —
+// it's meant to read as a persistent, always-visible shortcut rather than
+// a normal destination that dims when you're not on it.
+const ALWAYS_ACCENT_ROUTES = new Set(["dashboard/index"]);
 
 // A fully custom tabBar takes over ALL rendering, so nothing from the
 // default renderer carries over automatically — this is the one piece that
@@ -137,6 +144,7 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
               : (options.title ?? route.name);
           const badge = options.tabBarBadge;
           const Icon = ROUTE_ICONS[route.name] ?? Calendar;
+          const isAlwaysAccent = ALWAYS_ACCENT_ROUTES.has(route.name);
 
           const onPress = () => {
             const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
@@ -165,13 +173,28 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
               testID={`tab-${route.name}`}
             >
               <View>
-                <Icon size={22} color={isFocused ? colors.accent : colors.textMuted} strokeWidth={2} />
+                <Icon
+                  size={22}
+                  color={isFocused || isAlwaysAccent ? colors.accent : colors.textMuted}
+                  strokeWidth={2}
+                />
                 {badge !== undefined ? (
                   <View style={[styles.badge, { backgroundColor: colors.danger, borderColor: colors.cardBackground }]}>
                     <Text style={styles.badgeText}>{badge}</Text>
                   </View>
                 ) : null}
               </View>
+              {/* DIP-FP-182-mobile-adj-1: always rendered, even when label
+                  is "" (Dashboard) — an omitted Text element would still
+                  likely end up the same height in practice, since
+                  `container`'s row cross-axis defaults to stretch and every
+                  Pressable ends up sized to the tallest sibling regardless of
+                  its own content. But that's not something verifiable
+                  without a running app, so this keeps the element structure
+                  identical across every tab instead of relying on that
+                  reasoning — the empty string simply renders no visible
+                  text, satisfying the "same total visual footprint"
+                  requirement without depending on an unverified assumption. */}
               <Text
                 style={[styles.label, { color: isFocused ? colors.accent : colors.textMuted }]}
                 numberOfLines={1}
