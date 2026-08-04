@@ -599,7 +599,7 @@ function AnnouncementSection({
           disabled={isSubmitting}
           testID="event-detail-acknowledge"
         >
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acknowledgeButtonText}>Acknowledged</Text>}
+          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acknowledgeButtonText}>Acknowledge</Text>}
         </Pressable>
       )}
     </View>
