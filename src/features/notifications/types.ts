@@ -30,7 +30,11 @@ export interface EventReminderContext {
 // app/_layout.tsx's tap router — an untyped/new type already falls through
 // to the default event-detail navigation, which is the correct destination
 // for a nudge tap.
-export type NotificationType = "reminder" | "self-report" | "confirmation" | "rsvp-nudge";
+//
+// DIP-FP-191-mobile: "announcement" added, same reasoning as "rsvp-nudge" —
+// falls through to the same default event-detail navigation, which is
+// exactly where the Acknowledge action lives.
+export type NotificationType = "reminder" | "self-report" | "confirmation" | "rsvp-nudge" | "announcement";
 
 // Serialized into a scheduled notification's `data` payload — same shape the
 // events list screen already passes as route params to the detail screen,

@@ -17,6 +17,7 @@ import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
+import { reconcileAnnouncementReminders } from "@/src/features/notifications/services/announcementReminders.service";
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
 import { syncMyEventsBadge } from "@/src/features/notifications/hooks/useMyEventsBadgeCount";
@@ -266,6 +267,9 @@ export default function MyEventsScreen() {
       });
       reconcileSelfReportReminders(data).catch((err) => {
         console.warn("Failed to reconcile self-report reminders:", err);
+      });
+      reconcileAnnouncementReminders(data).catch((err) => {
+        console.warn("Failed to reconcile announcement reminders:", err);
       });
       reconcileConfirmationReminders().catch((err) => {
         console.warn("Failed to reconcile confirmation reminders:", err);

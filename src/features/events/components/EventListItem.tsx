@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Megaphone } from "lucide-react-native";
 import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MeetingResource, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -65,6 +66,13 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
   // fully visible — just visually distinguished with a red tint.
   const isCancelled = event.effective_status === "CANCELLED";
 
+  // DIP-FP-191-mobile: system_key === 'ANNOUNCEMENT' confirmed against
+  // web's merged event-type.types.ts (PR #151) — the one system-managed
+  // event type every tenant has. Announcements have no RSVP concept at all
+  // (they're acknowledged, not attended), so the prompt/pill below is
+  // suppressed entirely rather than showing a meaningless "Please RSVP now."
+  const isAnnouncement = event.event_type?.system_key === "ANNOUNCEMENT";
+
   // Mirrors app/(app)/events/[id].tsx exactly: resource-booked meetings
   // resolve their join link/label from the tracked resource (matched by id
   // out of the full list passed down from the list screen); freeform-
@@ -85,21 +93,40 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
       onPress={onPress}
       testID={`event-item-${event.id}`}
     >
+      {isAnnouncement ? (
+        <View style={styles.announcementMarker} testID={`event-item-announcement-marker-${event.id}`}>
+          <Megaphone size={16} color={colors.accent} />
+        </View>
+      ) : null}
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
       <Text style={[styles.meta, themed.meta]}>{formatDateTime(event.start_datetime)}</Text>
-      {/* Nested Pressable, not a plain Text tap handler: RN's responder
-          system gives this its own touch target, so tapping it opens the
-          map without also firing the outer card's onPress. alignSelf:
-          'flex-start' keeps its tap area sized to the text itself — the
-          card (its parent) defaults to alignItems: 'stretch', which would
-          otherwise stretch this Pressable to the full row width. */}
-      <Pressable
-        style={styles.locationPressable}
-        onPress={async () => Linking.openURL(await getMapUrl(event))}
-        testID={`event-item-map-${event.id}`}
-      >
-        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
-      </Pressable>
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-1: Announcement events carry placeholder
+        // location_name/location_address values ("Announcement"/"N/A",
+        // still forced server-side to satisfy a NOT NULL constraint) — a
+        // confusing, non-functional "open maps" link. Show who posted it
+        // instead, plain text (no link), nothing at all if created_by_member
+        // is null (predates the column, or an anonymized/deleted creator).
+        event.created_by_member ? (
+          <Text style={[styles.meta, themed.meta]} testID={`event-item-creator-${event.id}`}>
+            From: {event.created_by_member.first_name} {event.created_by_member.last_name}
+          </Text>
+        ) : null
+      ) : (
+        // Nested Pressable, not a plain Text tap handler: RN's responder
+        // system gives this its own touch target, so tapping it opens the
+        // map without also firing the outer card's onPress. alignSelf:
+        // 'flex-start' keeps its tap area sized to the text itself — the
+        // card (its parent) defaults to alignItems: 'stretch', which would
+        // otherwise stretch this Pressable to the full row width.
+        <Pressable
+          style={styles.locationPressable}
+          onPress={async () => Linking.openURL(await getMapUrl(event))}
+          testID={`event-item-map-${event.id}`}
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
+        </Pressable>
+      )}
       {onlineMeetingLink ? (
         <Pressable
           style={styles.locationPressable}
@@ -115,7 +142,29 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
-        {event.rsvp_status ? (
+        {isAnnouncement ? (
+          // DIP-FP-191-mobile-adj-2: acknowledged_at now list-level (web's
+          // merged PR #157) — same pill styling convention as the RSVP pill
+          // below, success-tint when acknowledged, warning-tint (muted/
+          // pending, not an error) when not.
+          <View
+            style={[
+              styles.pill,
+              {
+                backgroundColor: (event.acknowledged_at ? colors.success : colors.warning) + "22",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                { color: event.acknowledged_at ? colors.success : colors.warning },
+              ]}
+            >
+              {event.acknowledged_at ? "Acknowledged" : "Unacknowledged"}
+            </Text>
+          </View>
+        ) : event.rsvp_status ? (
           <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
             <Text style={[styles.pillText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
               {RSVP_LABELS[event.rsvp_status]}
@@ -184,5 +233,10 @@ const styles = StyleSheet.create({
   rsvpText: {
     fontSize: 13,
     color: "#555",
+  },
+  announcementMarker: {
+    position: "absolute",
+    top: 12,
+    right: 12,
   },
 });
