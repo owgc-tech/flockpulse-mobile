@@ -2,9 +2,21 @@ export type SelfReportStatus = "SELF_REPORTED_YES" | "SELF_REPORTED_NO";
 
 export type ConfirmationStatus = "PENDING_CONFIRMATION" | "CONFIRMED" | "REJECTED" | "NOT_REQUIRED";
 
+// DIP-FP-191-mobile: 'self_report' is the original FP-119-web row;
+// 'announcement' is an Announcement-type event this member hasn't
+// acknowledged yet — unioned into the same array so the Check-In badge count
+// combines both without a second endpoint. Confirmed against web's merged
+// PR #151 (self-report.types.ts) — no announcement_body field on this row
+// (that only lives on MyEvent/EventDetail); the Check-In tab navigates to
+// the event detail screen for the full write-up instead of rendering it
+// inline here.
+export type PendingSelfReportKind = "self_report" | "announcement";
+
 // Matches flockpulse-web's PendingSelfReportRow (GET /api/self-reports/pending)
-// exactly — confirmed live against the repository/route. DIP-FP-119-mobile.
+// exactly — confirmed live against the repository/route, including the
+// DIP-FP-191-web `kind` addition (PR #151, merged into dev at 6638877).
 export interface PendingSelfReportRow {
+  kind: PendingSelfReportKind;
   event_id: string;
   event_name: string;
   event_start_datetime: string;

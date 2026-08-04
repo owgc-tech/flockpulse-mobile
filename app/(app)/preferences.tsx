@@ -6,7 +6,10 @@ import { reconcileEventReminders } from "@/src/features/notifications/services/r
 import {
   getReminderOffsetHours,
   setReminderOffsetHours,
+  getAnnouncementReminderOffsetHours,
+  setAnnouncementReminderOffsetHours,
 } from "@/src/features/notifications/services/reminderSettings.service";
+import { reconcileAnnouncementReminders } from "@/src/features/notifications/services/announcementReminders.service";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 import { useThemePreference, type ThemePreference } from "@/src/theme/ThemePreferenceContext";
@@ -61,13 +64,25 @@ export default function PreferencesScreen() {
 
   const [slot1Hours, setSlot1Hours] = useState("");
   const [slot2Hours, setSlot2Hours] = useState("");
+  // DIP-FP-191-mobile: independent from slot1Hours/slot2Hours above —
+  // separate AsyncStorage keys (see reminderSettings.service.ts), same
+  // 24h/1h defaults, same before-a-deadline UX, but governs the two
+  // Announcement reminders (anchored on end_datetime) rather than the RSVP
+  // pre-event reminders (anchored on start_datetime) above.
+  const [announcementSlot1Hours, setAnnouncementSlot1Hours] = useState("");
+  const [announcementSlot2Hours, setAnnouncementSlot2Hours] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const offsetHours = await getReminderOffsetHours();
+      const [offsetHours, announcementOffsetHours] = await Promise.all([
+        getReminderOffsetHours(),
+        getAnnouncementReminderOffsetHours(),
+      ]);
       setSlot1Hours(String(offsetHours.slot1Hours));
       setSlot2Hours(String(offsetHours.slot2Hours));
+      setAnnouncementSlot1Hours(String(announcementOffsetHours.slot1Hours));
+      setAnnouncementSlot2Hours(String(announcementOffsetHours.slot2Hours));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load preferences.");
     } finally {
@@ -82,7 +97,14 @@ export default function PreferencesScreen() {
   const handleSubmit = async () => {
     const parsedSlot1 = validateHours(slot1Hours);
     const parsedSlot2 = validateHours(slot2Hours);
-    if (parsedSlot1 === null || parsedSlot2 === null) {
+    const parsedAnnouncementSlot1 = validateHours(announcementSlot1Hours);
+    const parsedAnnouncementSlot2 = validateHours(announcementSlot2Hours);
+    if (
+      parsedSlot1 === null ||
+      parsedSlot2 === null ||
+      parsedAnnouncementSlot1 === null ||
+      parsedAnnouncementSlot2 === null
+    ) {
       setError(`Enter a whole number of hours between 1 and ${MAX_HOURS} for each reminder.`);
       return;
     }
@@ -90,13 +112,17 @@ export default function PreferencesScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await setReminderOffsetHours(parsedSlot1, parsedSlot2);
+      await Promise.all([
+        setReminderOffsetHours(parsedSlot1, parsedSlot2),
+        setAnnouncementReminderOffsetHours(parsedAnnouncementSlot1, parsedAnnouncementSlot2),
+      ]);
       // DIP-FP-110 Grounding Check: reconciliation only otherwise runs on
       // the events list's initial mount / pull-to-refresh, so this applies
       // the new offsets immediately rather than leaving them silent until
-      // the member happens to refresh or reopen the app.
+      // the member happens to refresh or reopen the app. DIP-FP-191-mobile:
+      // same reasoning extended to the new Announcement reminder pair.
       const events = await listMyEvents();
-      await reconcileEventReminders(events);
+      await Promise.all([reconcileEventReminders(events), reconcileAnnouncementReminders(events)]);
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save preferences.");
@@ -144,6 +170,28 @@ export default function PreferencesScreen() {
         editable={!isSubmitting}
         placeholderTextColor={colors.textMuted}
         testID="preferences-slot2-hours"
+      />
+
+      <Text style={[styles.label, themed.label]}>Announcement reminder 1 (hours before deadline)</Text>
+      <TextInput
+        style={[styles.input, themed.input]}
+        value={announcementSlot1Hours}
+        onChangeText={setAnnouncementSlot1Hours}
+        keyboardType="number-pad"
+        editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
+        testID="preferences-announcement-slot1-hours"
+      />
+
+      <Text style={[styles.label, themed.label]}>Announcement reminder 2 (hours before deadline)</Text>
+      <TextInput
+        style={[styles.input, themed.input]}
+        value={announcementSlot2Hours}
+        onChangeText={setAnnouncementSlot2Hours}
+        keyboardType="number-pad"
+        editable={!isSubmitting}
+        placeholderTextColor={colors.textMuted}
+        testID="preferences-announcement-slot2-hours"
       />
 
       {error ? (

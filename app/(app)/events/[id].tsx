@@ -11,6 +11,8 @@ import {
   submitRsvp,
 } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
+import { acknowledgeAnnouncement } from "@/src/features/announcements/services/announcements.service";
+import { notifyAnnouncementAcknowledged } from "@/src/features/self-reports/selfReportRefreshSignal";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/services/tasks.service";
@@ -49,6 +51,9 @@ function getThemedStyles(colors: ThemeColors) {
     fieldLabel: { color: colors.text },
     fieldValue: { color: colors.text },
     error: { color: colors.danger },
+    announcementBody: { color: colors.text },
+    acknowledgeButton: { backgroundColor: colors.accent },
+    acknowledgedText: { color: colors.success },
   });
 }
 
@@ -346,6 +351,14 @@ export default function EventDetailScreen() {
   // until both are known, same defensive pattern used for showRoster above.
   // Real enforcement is server-side regardless (see updateEvent's doc
   // comment) — this only controls whether the button renders.
+  // DIP-FP-191-mobile: mirrors EventListItem's isAnnouncement check exactly —
+  // system_key === 'ANNOUNCEMENT' confirmed against web's merged PR #151.
+  // event_type is undefined only in the brief window before the fresh-fetch
+  // above resolves (see ScreenEvent's doc comment); RsvpSection renders in
+  // that window, same as it always has, and this screen re-renders once
+  // event_type arrives.
+  const isAnnouncement = event.event_type?.system_key === "ANNOUNCEMENT";
+
   const isAdminTier = role === "ADMIN";
   const canEdit =
     role !== undefined &&
@@ -465,12 +478,16 @@ export default function EventDetailScreen() {
 
       <View style={[styles.divider, themed.divider]} />
 
-      <RsvpSection
-        event={event}
-        onEventChange={setEvent}
-        setRosterRefreshTrigger={setRosterRefreshTrigger}
-        themed={themed}
-      />
+      {isAnnouncement ? (
+        <AnnouncementSection event={event} themed={themed} />
+      ) : (
+        <RsvpSection
+          event={event}
+          onEventChange={setEvent}
+          setRosterRefreshTrigger={setRosterRefreshTrigger}
+          themed={themed}
+        />
+      )}
 
       {showRoster ? (
         <>
@@ -523,6 +540,68 @@ function RsvpSection({
         readOnlyLabel={readOnlyRsvpLabel(event)}
         onSubmit={handleSubmit}
       />
+    </View>
+  );
+}
+
+// DIP-FP-191-mobile: reached three ways — My Events card tap, a Check-In
+// list row tap, or an announcement reminder tap — all the same action.
+// acknowledgeAnnouncement is idempotent server-side (confirmed against
+// web's merged announcement.repository.ts: repeated taps return the same
+// row rather than erroring), and there is no field anywhere in the
+// event/self-report API surface that reports "already acknowledged" for a
+// single event outside of Check-In list membership — so this always shows
+// a tappable Acknowledge button rather than trying to pre-determine
+// acknowledged state, and flips to a local "Acknowledged" confirmation for
+// the rest of this screen visit once the call succeeds.
+function AnnouncementSection({
+  event,
+  themed,
+}: {
+  event: ScreenEvent;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  const [isAcknowledged, setIsAcknowledged] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleAcknowledge = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await acknowledgeAnnouncement(event.id);
+      notifyAnnouncementAcknowledged(event.id);
+      setIsAcknowledged(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to acknowledge this announcement.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Announcement</Text>
+      {event.announcement_body ? (
+        <Text style={[styles.announcementBody, themed.announcementBody]}>{event.announcement_body}</Text>
+      ) : null}
+
+      {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
+
+      {isAcknowledged ? (
+        <Text style={[styles.acknowledgedText, themed.acknowledgedText]} testID="event-detail-acknowledged">
+          ✓ Acknowledged
+        </Text>
+      ) : (
+        <Pressable
+          style={[styles.acknowledgeButton, themed.acknowledgeButton, isSubmitting && styles.buttonDisabled]}
+          onPress={handleAcknowledge}
+          disabled={isSubmitting}
+          testID="event-detail-acknowledge"
+        >
+          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acknowledgeButtonText}>Acknowledged</Text>}
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -656,5 +735,29 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 15,
     textAlign: "center",
+  },
+  announcementBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  acknowledgeButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#2563eb",
+  },
+  acknowledgeButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  acknowledgedText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#16a34a",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });

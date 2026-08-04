@@ -15,6 +15,16 @@ export interface EventTargetSelector {
   member_ids?: string[];
 }
 
+// DIP-FP-191-mobile: nested on MyEvent/EventDetail so mobile can detect an
+// Announcement (system_key === 'ANNOUNCEMENT') without a second round-trip
+// to /api/event-types — confirmed against web's merged PR #151
+// (event.types.ts's EventTypeSummary), field names exact.
+export interface EventTypeSummary {
+  id: string;
+  name: string;
+  system_key: string | null;
+}
+
 // Matches flockpulse-web's EventListRow (app/api/events/mine), confirmed
 // live — flat, snake_case, no nesting for the appended RSVP fields.
 export interface MyEvent {
@@ -39,6 +49,14 @@ export interface MyEvent {
   // minus the event's rsvp_closure_days override or the tenant default) —
   // confirmed live on both /api/events/mine and /api/events/:id (PR #77).
   rsvp_closure_at: string;
+  // DIP-FP-191-mobile: both added by web's merged PR #151 — null for every
+  // non-Announcement event. event_type lets My Events/EventListItem detect
+  // an Announcement card without a second fetch; announcement_body carries
+  // the full write-up so My Events and event detail can render it from the
+  // same payload (the Check-In tab's pending-list endpoint does NOT carry
+  // this field — see PendingSelfReportRow's doc comment).
+  announcement_body: string | null;
+  event_type: EventTypeSummary;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
