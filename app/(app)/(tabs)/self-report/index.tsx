@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { submitSelfReport, listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
 import type { PendingSelfReportRow } from "@/src/features/self-reports/types";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
+import { consumePendingAcknowledgements } from "@/src/features/self-reports/selfReportRefreshSignal";
 import { ApiError } from "@/src/lib/api";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -26,6 +28,9 @@ function getThemedStyles(colors: ThemeColors) {
     buttonText: { color: colors.text },
     submitButton: { backgroundColor: colors.success },
     error: { color: colors.danger },
+    announcementBadge: { backgroundColor: colors.accent + "22" },
+    announcementBadgeText: { color: colors.accent },
+    announcementCta: { color: colors.accent },
   });
 }
 
@@ -72,6 +77,22 @@ export default function SelfReportTabScreen() {
     load();
   }, [load]);
 
+  // DIP-FP-191-mobile: Announcement acknowledgement happens on the event
+  // detail screen (navigated to from this list, My Events, or a reminder
+  // tap), not inline here — this consumes that hand-off on every focus (not
+  // just mount) so a just-acknowledged row disappears on return without a
+  // full refetch/loading blink. See selfReportRefreshSignal.ts.
+  useFocusEffect(
+    useCallback(() => {
+      const acknowledgedIds = consumePendingAcknowledgements();
+      if (!acknowledgedIds) return;
+      setItems((prev) => prev.filter((i) => !(i.kind === "announcement" && acknowledgedIds.has(i.event_id))));
+      syncSelfReportBadge().catch((err) => {
+        console.warn("Failed to sync self-report badge:", err);
+      });
+    }, [])
+  );
+
   // DIP-FP-152: mirrors Confirmation's exact pattern (confirmations/index.tsx
   // handleDecision) — instant local removal plus an immediate badge resync,
   // no re-fetch needed, called right after a successful submission rather
@@ -81,6 +102,10 @@ export default function SelfReportTabScreen() {
     syncSelfReportBadge().catch((err) => {
       console.warn("Failed to sync self-report badge:", err);
     });
+  };
+
+  const handleOpenAnnouncement = (eventId: string) => {
+    router.push({ pathname: "/(app)/events/[id]", params: { id: eventId } });
   };
 
   return (
@@ -104,9 +129,13 @@ export default function SelfReportTabScreen() {
               <Text style={[styles.empty, themed.empty]}>No pending self-reports</Text>
             </View>
           }
-          renderItem={({ item }) => (
-            <SelfReportItem item={item} onSubmitted={() => handleSubmitted(item.event_id)} themed={themed} />
-          )}
+          renderItem={({ item }) =>
+            item.kind === "announcement" ? (
+              <AnnouncementCheckInItem item={item} onPress={() => handleOpenAnnouncement(item.event_id)} themed={themed} />
+            ) : (
+              <SelfReportItem item={item} onSubmitted={() => handleSubmitted(item.event_id)} themed={themed} />
+            )
+          }
         />
       )}
     </View>
@@ -270,6 +299,37 @@ function SelfReportItem({
   );
 }
 
+// DIP-FP-191-mobile: announcement rows carry only event_id/name/start/end/
+// location + kind (confirmed against web's merged PendingSelfReportRow —
+// no announcement_body here), so unlike SelfReportItem this is a simple
+// tappable card, not a form — the full write-up and the actual Acknowledge
+// action both live on the event detail screen this navigates to.
+function AnnouncementCheckInItem({
+  item,
+  onPress,
+  themed,
+}: {
+  item: PendingSelfReportRow;
+  onPress: () => void;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  return (
+    <Pressable
+      style={[styles.card, themed.card]}
+      onPress={onPress}
+      testID={`announcement-check-in-item-${item.event_id}`}
+    >
+      <View style={[styles.announcementBadge, themed.announcementBadge]}>
+        <Text style={[styles.announcementBadgeText, themed.announcementBadgeText]}>Announcement</Text>
+      </View>
+      <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
+      <Text style={[styles.meta, themed.meta]}>{formatEventRange(item.event_start_datetime, item.event_end_datetime)}</Text>
+      <Text style={[styles.meta, themed.meta]}>{item.event_location_name}</Text>
+      <Text style={[styles.announcementCta, themed.announcementCta]}>Tap to read & acknowledge ›</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -373,5 +433,25 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 13,
     marginTop: 8,
+  },
+  announcementBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "#dbeafe",
+    marginBottom: 6,
+  },
+  announcementBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2563eb",
+    textTransform: "uppercase",
+  },
+  announcementCta: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#2563eb",
+    marginTop: 10,
   },
 });

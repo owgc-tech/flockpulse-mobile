@@ -11,6 +11,8 @@ import {
   submitRsvp,
 } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
+import { acknowledgeAnnouncement } from "@/src/features/announcements/services/announcements.service";
+import { notifyAnnouncementAcknowledged } from "@/src/features/self-reports/selfReportRefreshSignal";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/services/tasks.service";
@@ -49,6 +51,9 @@ function getThemedStyles(colors: ThemeColors) {
     fieldLabel: { color: colors.text },
     fieldValue: { color: colors.text },
     error: { color: colors.danger },
+    announcementBody: { color: colors.text },
+    acknowledgeButton: { backgroundColor: colors.accent },
+    acknowledgedText: { color: colors.success },
   });
 }
 
@@ -105,7 +110,7 @@ async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<st
 // (see its doc comment), so those fields are Partial'd here to reflect that
 // this component's own state may not have them yet.
 type ScreenEvent = MyEvent &
-  Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id">>;
+  Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id" | "acknowledged_at">>;
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -346,6 +351,14 @@ export default function EventDetailScreen() {
   // until both are known, same defensive pattern used for showRoster above.
   // Real enforcement is server-side regardless (see updateEvent's doc
   // comment) — this only controls whether the button renders.
+  // DIP-FP-191-mobile: mirrors EventListItem's isAnnouncement check exactly —
+  // system_key === 'ANNOUNCEMENT' confirmed against web's merged PR #151.
+  // event_type is undefined only in the brief window before the fresh-fetch
+  // above resolves (see ScreenEvent's doc comment); RsvpSection renders in
+  // that window, same as it always has, and this screen re-renders once
+  // event_type arrives.
+  const isAnnouncement = event.event_type?.system_key === "ANNOUNCEMENT";
+
   const isAdminTier = role === "ADMIN";
   const canEdit =
     role !== undefined &&
@@ -388,18 +401,32 @@ export default function EventDetailScreen() {
 
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
       <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      {/* alignSelf: 'flex-start' keeps the tap area sized to the two text
-          lines — the ScrollView's contentContainerStyle (this Pressable's
-          parent) defaults to alignItems: 'stretch', which would otherwise
-          stretch it to the full screen width. */}
-      <Pressable
-        style={styles.locationPressable}
-        onPress={async () => Linking.openURL(await getMapUrl(event))}
-        testID="event-detail-map"
-      >
-        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
-        <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
-      </Pressable>
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-1: same replacement as EventListItem.tsx —
+        // Announcement events carry placeholder location_name/
+        // location_address ("Announcement"/"N/A", still forced server-side
+        // to satisfy a NOT NULL constraint), a confusing non-functional
+        // "open maps" link. Show who posted it instead, plain text, nothing
+        // at all if created_by_member is null.
+        event.created_by_member ? (
+          <Text style={[styles.meta, themed.meta]} testID="event-detail-creator">
+            From: {event.created_by_member.first_name} {event.created_by_member.last_name}
+          </Text>
+        ) : null
+      ) : (
+        // alignSelf: 'flex-start' keeps the tap area sized to the two text
+        // lines — the ScrollView's contentContainerStyle (this Pressable's
+        // parent) defaults to alignItems: 'stretch', which would otherwise
+        // stretch it to the full screen width.
+        <Pressable
+          style={styles.locationPressable}
+          onPress={async () => Linking.openURL(await getMapUrl(event))}
+          testID="event-detail-map"
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
+          <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
+        </Pressable>
+      )}
 
       {onlineMeetingLink ? (
         <Pressable
@@ -465,12 +492,16 @@ export default function EventDetailScreen() {
 
       <View style={[styles.divider, themed.divider]} />
 
-      <RsvpSection
-        event={event}
-        onEventChange={setEvent}
-        setRosterRefreshTrigger={setRosterRefreshTrigger}
-        themed={themed}
-      />
+      {isAnnouncement ? (
+        <AnnouncementSection event={event} themed={themed} />
+      ) : (
+        <RsvpSection
+          event={event}
+          onEventChange={setEvent}
+          setRosterRefreshTrigger={setRosterRefreshTrigger}
+          themed={themed}
+        />
+      )}
 
       {showRoster ? (
         <>
@@ -524,6 +555,86 @@ function RsvpSection({
         onSubmit={handleSubmit}
         guestsAllowed={event.guests_allowed}
       />
+    </View>
+  );
+}
+
+// DIP-FP-191-mobile: reached three ways — My Events card tap, a Check-In
+// list row tap, or an announcement reminder tap — all the same action.
+// acknowledgeAnnouncement is idempotent server-side (confirmed against
+// web's merged announcement.repository.ts: repeated taps return the same
+// row rather than erroring). DIP-FP-191-mobile-adj-1: acknowledged_at
+// (web's merged PR #152) now reports true prior state on
+// GET /api/events/:id, so this button correctly starts already-acknowledged
+// when appropriate instead of always starting tappable — see isAcknowledged
+// below for how that's derived.
+function AnnouncementSection({
+  event,
+  themed,
+}: {
+  event: ScreenEvent;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  // DIP-FP-191-mobile-adj-1 deviation: the DIP specified
+  // `useState(!!event.acknowledged_at)`, but that only evaluates once, at
+  // this component's first mount. Two of the three entry points into this
+  // screen (My Events card tap, an announcement reminder tap) pass a full
+  // MyEvent-shaped `event` route param up front — AnnouncementSection
+  // mounts on the very first render, before getEventById's fresh-fetch
+  // (the only place acknowledged_at actually lands, per its doc comment on
+  // EventDetail) resolves. A plain useState initializer would permanently
+  // lock in `false` for those two paths regardless of true prior state,
+  // since the later merge into `event` doesn't re-run it — defeating the
+  // DIP's own stated goal ("correctly shows Acknowledged immediately on
+  // every visit"). Only the third entry point (Check-In list tap, which
+  // passes just an id and waits for the fresh-fetch) would have worked with
+  // the literal instruction. Fixed by deriving the displayed state
+  // reactively each render instead: justAcknowledged tracks a same-session
+  // tap, isAcknowledged below combines it with the live event prop, so it
+  // picks up acknowledged_at the moment the fresh-fetch merge lands,
+  // regardless of which entry point was used.
+  const [justAcknowledged, setJustAcknowledged] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isAcknowledged = justAcknowledged || !!event.acknowledged_at;
+
+  const handleAcknowledge = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await acknowledgeAnnouncement(event.id);
+      notifyAnnouncementAcknowledged(event.id);
+      setJustAcknowledged(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to acknowledge this announcement.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <View>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Announcement</Text>
+      {event.announcement_body ? (
+        <Text style={[styles.announcementBody, themed.announcementBody]}>{event.announcement_body}</Text>
+      ) : null}
+
+      {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
+
+      {isAcknowledged ? (
+        <Text style={[styles.acknowledgedText, themed.acknowledgedText]} testID="event-detail-acknowledged">
+          ✓ Acknowledged
+        </Text>
+      ) : (
+        <Pressable
+          style={[styles.acknowledgeButton, themed.acknowledgeButton, isSubmitting && styles.buttonDisabled]}
+          onPress={handleAcknowledge}
+          disabled={isSubmitting}
+          testID="event-detail-acknowledge"
+        >
+          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.acknowledgeButtonText}>Acknowledge</Text>}
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -657,5 +768,29 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 15,
     textAlign: "center",
+  },
+  announcementBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  acknowledgeButton: {
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: "#2563eb",
+  },
+  acknowledgeButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  acknowledgedText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#16a34a",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });
