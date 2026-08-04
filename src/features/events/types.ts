@@ -74,6 +74,12 @@ export interface MyEvent {
   // forced server-side to satisfy a NOT NULL constraint) with a real "From:
   // {name}" display on Announcement cards.
   created_by_member: CreatedByMemberSummary | null;
+  // DIP-FP-191-mobile-adj-1, widened to list scope by DIP-FP-191-mobile-adj-2:
+  // whether the current authenticated caller has acknowledged this event,
+  // confirmed against web's merged PR #157 (moved from EventDetailRow up to
+  // EventListRow, still inherited by EventDetailRow). Null for any event
+  // the caller hasn't acknowledged, including every non-Announcement event.
+  acknowledged_at: string | null;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -107,11 +113,6 @@ export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   // is left in place for display/audit purposes, this is now the field
   // the canEdit permission gate reads.
   owner_member_id: string | null;
-  // DIP-FP-191-mobile-adj-1: detail-only (not on MyEvent/EventListRow),
-  // confirmed against web's merged PR #152 — whether the current
-  // authenticated caller has acknowledged this event. Null for any event
-  // the caller hasn't acknowledged, including every non-Announcement event.
-  acknowledged_at: string | null;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).

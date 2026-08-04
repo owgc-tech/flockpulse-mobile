@@ -142,7 +142,29 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
             {STATUS_LABELS[event.effective_status]}
           </Text>
         </View>
-        {isAnnouncement ? null : event.rsvp_status ? (
+        {isAnnouncement ? (
+          // DIP-FP-191-mobile-adj-2: acknowledged_at now list-level (web's
+          // merged PR #157) — same pill styling convention as the RSVP pill
+          // below, success-tint when acknowledged, warning-tint (muted/
+          // pending, not an error) when not.
+          <View
+            style={[
+              styles.pill,
+              {
+                backgroundColor: (event.acknowledged_at ? colors.success : colors.warning) + "22",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                { color: event.acknowledged_at ? colors.success : colors.warning },
+              ]}
+            >
+              {event.acknowledged_at ? "Acknowledged" : "Unacknowledged"}
+            </Text>
+          </View>
+        ) : event.rsvp_status ? (
           <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
             <Text style={[styles.pillText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
               {RSVP_LABELS[event.rsvp_status]}
