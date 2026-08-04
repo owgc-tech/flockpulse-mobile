@@ -100,19 +100,33 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
       ) : null}
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
       <Text style={[styles.meta, themed.meta]}>{formatDateTime(event.start_datetime)}</Text>
-      {/* Nested Pressable, not a plain Text tap handler: RN's responder
-          system gives this its own touch target, so tapping it opens the
-          map without also firing the outer card's onPress. alignSelf:
-          'flex-start' keeps its tap area sized to the text itself — the
-          card (its parent) defaults to alignItems: 'stretch', which would
-          otherwise stretch this Pressable to the full row width. */}
-      <Pressable
-        style={styles.locationPressable}
-        onPress={async () => Linking.openURL(await getMapUrl(event))}
-        testID={`event-item-map-${event.id}`}
-      >
-        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
-      </Pressable>
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-1: Announcement events carry placeholder
+        // location_name/location_address values ("Announcement"/"N/A",
+        // still forced server-side to satisfy a NOT NULL constraint) — a
+        // confusing, non-functional "open maps" link. Show who posted it
+        // instead, plain text (no link), nothing at all if created_by_member
+        // is null (predates the column, or an anonymized/deleted creator).
+        event.created_by_member ? (
+          <Text style={[styles.meta, themed.meta]} testID={`event-item-creator-${event.id}`}>
+            From: {event.created_by_member.first_name} {event.created_by_member.last_name}
+          </Text>
+        ) : null
+      ) : (
+        // Nested Pressable, not a plain Text tap handler: RN's responder
+        // system gives this its own touch target, so tapping it opens the
+        // map without also firing the outer card's onPress. alignSelf:
+        // 'flex-start' keeps its tap area sized to the text itself — the
+        // card (its parent) defaults to alignItems: 'stretch', which would
+        // otherwise stretch this Pressable to the full row width.
+        <Pressable
+          style={styles.locationPressable}
+          onPress={async () => Linking.openURL(await getMapUrl(event))}
+          testID={`event-item-map-${event.id}`}
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
+        </Pressable>
+      )}
       {onlineMeetingLink ? (
         <Pressable
           style={styles.locationPressable}

@@ -110,7 +110,7 @@ async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<st
 // (see its doc comment), so those fields are Partial'd here to reflect that
 // this component's own state may not have them yet.
 type ScreenEvent = MyEvent &
-  Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id">>;
+  Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id" | "acknowledged_at">>;
 
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
@@ -401,18 +401,32 @@ export default function EventDetailScreen() {
 
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
       <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
-      {/* alignSelf: 'flex-start' keeps the tap area sized to the two text
-          lines — the ScrollView's contentContainerStyle (this Pressable's
-          parent) defaults to alignItems: 'stretch', which would otherwise
-          stretch it to the full screen width. */}
-      <Pressable
-        style={styles.locationPressable}
-        onPress={async () => Linking.openURL(await getMapUrl(event))}
-        testID="event-detail-map"
-      >
-        <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
-        <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
-      </Pressable>
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-1: same replacement as EventListItem.tsx —
+        // Announcement events carry placeholder location_name/
+        // location_address ("Announcement"/"N/A", still forced server-side
+        // to satisfy a NOT NULL constraint), a confusing non-functional
+        // "open maps" link. Show who posted it instead, plain text, nothing
+        // at all if created_by_member is null.
+        event.created_by_member ? (
+          <Text style={[styles.meta, themed.meta]} testID="event-detail-creator">
+            From: {event.created_by_member.first_name} {event.created_by_member.last_name}
+          </Text>
+        ) : null
+      ) : (
+        // alignSelf: 'flex-start' keeps the tap area sized to the two text
+        // lines — the ScrollView's contentContainerStyle (this Pressable's
+        // parent) defaults to alignItems: 'stretch', which would otherwise
+        // stretch it to the full screen width.
+        <Pressable
+          style={styles.locationPressable}
+          onPress={async () => Linking.openURL(await getMapUrl(event))}
+          testID="event-detail-map"
+        >
+          <Text style={[styles.meta, themed.meta, styles.locationLink, themed.locationLink]}>{event.location_name}</Text>
+          <Text style={[styles.metaSecondary, themed.metaSecondary, styles.locationLink, themed.locationLink]}>{event.location_address}</Text>
+        </Pressable>
+      )}
 
       {onlineMeetingLink ? (
         <Pressable
@@ -548,12 +562,11 @@ function RsvpSection({
 // list row tap, or an announcement reminder tap — all the same action.
 // acknowledgeAnnouncement is idempotent server-side (confirmed against
 // web's merged announcement.repository.ts: repeated taps return the same
-// row rather than erroring), and there is no field anywhere in the
-// event/self-report API surface that reports "already acknowledged" for a
-// single event outside of Check-In list membership — so this always shows
-// a tappable Acknowledge button rather than trying to pre-determine
-// acknowledged state, and flips to a local "Acknowledged" confirmation for
-// the rest of this screen visit once the call succeeds.
+// row rather than erroring). DIP-FP-191-mobile-adj-1: acknowledged_at
+// (web's merged PR #152) now reports true prior state on
+// GET /api/events/:id, so this button correctly starts already-acknowledged
+// when appropriate instead of always starting tappable — see isAcknowledged
+// below for how that's derived.
 function AnnouncementSection({
   event,
   themed,
@@ -561,9 +574,28 @@ function AnnouncementSection({
   event: ScreenEvent;
   themed: ReturnType<typeof getThemedStyles>;
 }) {
-  const [isAcknowledged, setIsAcknowledged] = useState(false);
+  // DIP-FP-191-mobile-adj-1 deviation: the DIP specified
+  // `useState(!!event.acknowledged_at)`, but that only evaluates once, at
+  // this component's first mount. Two of the three entry points into this
+  // screen (My Events card tap, an announcement reminder tap) pass a full
+  // MyEvent-shaped `event` route param up front — AnnouncementSection
+  // mounts on the very first render, before getEventById's fresh-fetch
+  // (the only place acknowledged_at actually lands, per its doc comment on
+  // EventDetail) resolves. A plain useState initializer would permanently
+  // lock in `false` for those two paths regardless of true prior state,
+  // since the later merge into `event` doesn't re-run it — defeating the
+  // DIP's own stated goal ("correctly shows Acknowledged immediately on
+  // every visit"). Only the third entry point (Check-In list tap, which
+  // passes just an id and waits for the fresh-fetch) would have worked with
+  // the literal instruction. Fixed by deriving the displayed state
+  // reactively each render instead: justAcknowledged tracks a same-session
+  // tap, isAcknowledged below combines it with the live event prop, so it
+  // picks up acknowledged_at the moment the fresh-fetch merge lands,
+  // regardless of which entry point was used.
+  const [justAcknowledged, setJustAcknowledged] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isAcknowledged = justAcknowledged || !!event.acknowledged_at;
 
   const handleAcknowledge = async () => {
     setError(null);
@@ -571,7 +603,7 @@ function AnnouncementSection({
     try {
       await acknowledgeAnnouncement(event.id);
       notifyAnnouncementAcknowledged(event.id);
-      setIsAcknowledged(true);
+      setJustAcknowledged(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to acknowledge this announcement.");
     } finally {

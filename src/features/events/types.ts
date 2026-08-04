@@ -25,6 +25,17 @@ export interface EventTypeSummary {
   system_key: string | null;
 }
 
+// DIP-FP-191-mobile-adj-1: nested on MyEvent/EventDetail via web's
+// created_by_member_id join — confirmed against web's merged PR #152
+// (event.types.ts's CreatedByMemberSummary), field names exact. Null for
+// events that predate the underlying column or whose creator was later
+// anonymized/deleted.
+export interface CreatedByMemberSummary {
+  id: string;
+  first_name: string;
+  last_name: string;
+}
+
 // Matches flockpulse-web's EventListRow (app/api/events/mine), confirmed
 // live — flat, snake_case, no nesting for the appended RSVP fields.
 export interface MyEvent {
@@ -57,6 +68,12 @@ export interface MyEvent {
   // this field — see PendingSelfReportRow's doc comment).
   announcement_body: string | null;
   event_type: EventTypeSummary;
+  // DIP-FP-191-mobile-adj-1: added by web's merged PR #152 — confirmed on
+  // both EventListRow (this type) and EventDetailRow. Replaces the
+  // placeholder location_name/location_address ("Announcement"/"N/A", still
+  // forced server-side to satisfy a NOT NULL constraint) with a real "From:
+  // {name}" display on Announcement cards.
+  created_by_member: CreatedByMemberSummary | null;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -90,6 +107,11 @@ export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   // is left in place for display/audit purposes, this is now the field
   // the canEdit permission gate reads.
   owner_member_id: string | null;
+  // DIP-FP-191-mobile-adj-1: detail-only (not on MyEvent/EventListRow),
+  // confirmed against web's merged PR #152 — whether the current
+  // authenticated caller has acknowledged this event. Null for any event
+  // the caller hasn't acknowledged, including every non-Announcement event.
+  acknowledged_at: string | null;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).
