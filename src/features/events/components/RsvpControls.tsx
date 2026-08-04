@@ -25,14 +25,24 @@ interface RsvpControlsProps {
   currentStatus: RsvpStatus | null;
   editable: boolean;
   readOnlyLabel: string;
-  onSubmit: (status: RsvpStatus, reason?: string) => Promise<void>;
+  onSubmit: (status: RsvpStatus, reason?: string, guestCount?: number) => Promise<void>;
+  // DIP-FP-189-mobile: confirmed against web's merged PR #158 — when false
+  // (the default, every existing event), Yes/Tentative behavior is
+  // completely unchanged from before this DIP.
+  guestsAllowed: boolean;
 }
 
-export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit }: RsvpControlsProps) {
+export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit, guestsAllowed }: RsvpControlsProps) {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [reason, setReason] = useState("");
   const [showReasonForm, setShowReasonForm] = useState(false);
+  // DIP-FP-189-mobile: mirrors showReasonForm's exact shape — stores which
+  // status (YES or TENTATIVE) triggered the form, rather than a plain
+  // boolean, since Submit needs to know which status to actually call
+  // onSubmit with.
+  const [showGuestForm, setShowGuestForm] = useState<"YES" | "TENTATIVE" | null>(null);
+  const [guestCount, setGuestCount] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState<RsvpStatus | "NO_REASON" | null>(null);
 
@@ -47,6 +57,11 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   }
 
   const handlePressYes = async () => {
+    if (guestsAllowed) {
+      setError(null);
+      setShowGuestForm("YES");
+      return;
+    }
     setError(null);
     setSubmittingAction("YES");
     try {
@@ -59,10 +74,36 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
   };
 
   const handlePressTentative = async () => {
+    if (guestsAllowed) {
+      setError(null);
+      setShowGuestForm("TENTATIVE");
+      return;
+    }
     setError(null);
     setSubmittingAction("TENTATIVE");
     try {
       await onSubmit("TENTATIVE");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
+    } finally {
+      setSubmittingAction(null);
+    }
+  };
+
+  // DIP-FP-189-mobile: mirrors handleSubmitNo's exact shape — validate,
+  // submit, close the form only on success.
+  const handleSubmitGuestForm = async () => {
+    if (!showGuestForm) return;
+    const parsedGuestCount = Number(guestCount);
+    if (!Number.isInteger(parsedGuestCount) || parsedGuestCount < 0) {
+      setError("Enter a whole number of guests (0 or more).");
+      return;
+    }
+    setError(null);
+    setSubmittingAction(showGuestForm);
+    try {
+      await onSubmit(showGuestForm, undefined, parsedGuestCount);
+      setShowGuestForm(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit RSVP.");
     } finally {
@@ -135,6 +176,48 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit 
               testID="rsvp-submit-no"
             >
               {submittingAction === "NO_REASON" ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Submit</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      ) : showGuestForm ? (
+        // DIP-FP-189-mobile: mirrors the decline-reason form's exact
+        // structure above — a revealed form with Cancel/Submit, submit only
+        // on confirmation.
+        <View>
+          <Text style={[styles.label, themed.label]}>Number of guests</Text>
+          <TextInput
+            style={[styles.input, themed.input, styles.guestCountInput]}
+            value={guestCount}
+            onChangeText={setGuestCount}
+            keyboardType="number-pad"
+            editable={submittingAction === null}
+            placeholderTextColor={colors.textMuted}
+            testID="rsvp-guest-count-input"
+          />
+          <View style={styles.row}>
+            <Pressable
+              style={[styles.button, styles.buttonSecondary, themed.buttonSecondary]}
+              onPress={() => {
+                setShowGuestForm(null);
+                setGuestCount("0");
+                setError(null);
+              }}
+              disabled={submittingAction !== null}
+              testID="rsvp-cancel-guest"
+            >
+              <Text style={[styles.buttonSecondaryText, themed.buttonSecondaryText]}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.button, styles.buttonPrimary]}
+              onPress={handleSubmitGuestForm}
+              disabled={submittingAction !== null}
+              testID="rsvp-submit-guest"
+            >
+              {submittingAction === showGuestForm ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.buttonText}>Submit</Text>
@@ -245,6 +328,13 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: "top",
     marginBottom: 12,
+  },
+  // DIP-FP-189-mobile: overrides input's multiline-textarea sizing (meant
+  // for the decline-reason field above) — a single-line numeric field
+  // doesn't need 80px of height.
+  guestCountInput: {
+    minHeight: 44,
+    textAlignVertical: "center",
   },
   error: {
     color: "#c0392b",

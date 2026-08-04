@@ -34,10 +34,16 @@ export async function getEventById(eventId: string): Promise<EventDetail> {
 // Callers can branch on err.code (RSVP_CLOSED / RSVP_REASON_REQUIRED /
 // NOT_AN_ATTENDEE / INVALID_STATE / ...) via ApiError rather than getting a
 // single generic failure — see src/lib/api.ts.
+// DIP-FP-189-mobile: guestCount mirrors rsvpReason's conditional-inclusion
+// pattern above — only sent when the caller actually provides it (RsvpControls
+// only ever does so for Yes/Tentative on a guests-allowed event), confirmed
+// against web's merged PR #158's guest_count field name and its own
+// NO-rejects-guest_count / guests-not-allowed-rejects-guest_count validation.
 export async function submitRsvp(
   eventId: string,
   rsvpStatus: RsvpStatus,
-  rsvpReason?: string
+  rsvpReason?: string,
+  guestCount?: number
 ): Promise<RsvpResponse> {
   return apiFetch<RsvpResponse>("/api/rsvps", {
     method: "POST",
@@ -46,6 +52,7 @@ export async function submitRsvp(
       rsvp_status: rsvpStatus,
       // Server nulls rsvp_reason regardless for YES — only send it for NO.
       ...(rsvpStatus === "NO" ? { rsvp_reason: rsvpReason } : {}),
+      ...(guestCount !== undefined ? { guest_count: guestCount } : {}),
     }),
   });
 }

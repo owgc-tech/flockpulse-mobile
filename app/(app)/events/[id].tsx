@@ -526,8 +526,8 @@ function RsvpSection({
 }) {
   const editable = isRsvpWindowOpen(event);
 
-  const handleSubmit = async (status: RsvpStatus, reason?: string) => {
-    const response = await submitRsvp(event.id, status, reason);
+  const handleSubmit = async (status: RsvpStatus, reason?: string, guestCount?: number) => {
+    const response = await submitRsvp(event.id, status, reason, guestCount);
     // Update local state so the screen reflects the new response
     // immediately without a re-fetch. My Events list and this screen's own
     // Roster section pick up the change via DIP-FP-151's mechanisms below —
@@ -553,6 +553,7 @@ function RsvpSection({
         editable={editable}
         readOnlyLabel={readOnlyRsvpLabel(event)}
         onSubmit={handleSubmit}
+        guestsAllowed={event.guests_allowed}
       />
     </View>
   );

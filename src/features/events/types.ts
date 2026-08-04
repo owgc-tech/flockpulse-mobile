@@ -80,6 +80,11 @@ export interface MyEvent {
   // EventListRow, still inherited by EventDetailRow). Null for any event
   // the caller hasn't acknowledged, including every non-Announcement event.
   acknowledged_at: string | null;
+  // DIP-FP-189-mobile: confirmed against web's merged PR #158 — not
+  // nullable, default false for every event created before this field
+  // existed (or with the toggle off). Whether this event's RSVP flow
+  // accepts a guest_count at all.
+  guests_allowed: boolean;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -122,6 +127,13 @@ export interface RsvpResponse {
   member_id: string;
   rsvp_status: RsvpStatus;
   rsvp_reason: string | null;
+  // DIP-FP-189-mobile: confirmed against web's merged PR #158 — null unless
+  // rsvp_status is YES or TENTATIVE. There's no dedicated RSVP "request"
+  // type on mobile to extend the way web's SubmitRsvpInput is (submitRsvp
+  // takes positional params, not an input object) — the request-side change
+  // is the new guestCount parameter on submitRsvp itself (events.service.ts),
+  // not a types.ts addition.
+  guest_count: number | null;
   responded_at: string;
   is_late: false;
 }
