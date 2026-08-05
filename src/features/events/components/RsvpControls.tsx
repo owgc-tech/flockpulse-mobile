@@ -37,11 +37,12 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit,
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [reason, setReason] = useState("");
   const [showReasonForm, setShowReasonForm] = useState(false);
-  // DIP-FP-189-mobile: mirrors showReasonForm's exact shape — stores which
-  // status (YES or TENTATIVE) triggered the form, rather than a plain
-  // boolean, since Submit needs to know which status to actually call
-  // onSubmit with.
-  const [showGuestForm, setShowGuestForm] = useState<"YES" | "TENTATIVE" | null>(null);
+  // DIP-FP-189-mobile-adj-1: Yes-only now (reverted from Yes/Tentative),
+  // confirmed against web's merged PR #160 — guest_count is rejected
+  // server-side for any status other than YES. Kept as a status-typed
+  // state (not a plain boolean) for symmetry with showReasonForm, even
+  // though only "YES" is ever actually set now.
+  const [showGuestForm, setShowGuestForm] = useState<"YES" | null>(null);
   const [guestCount, setGuestCount] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [submittingAction, setSubmittingAction] = useState<RsvpStatus | "NO_REASON" | null>(null);
@@ -73,12 +74,11 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit,
     }
   };
 
+  // DIP-FP-189-mobile-adj-1: reverted — Tentative always submits
+  // immediately now, regardless of guestsAllowed. Only Yes can carry a
+  // guest_count (web's tightened rsvps_guest_count_status_check rejects
+  // it on any other status).
   const handlePressTentative = async () => {
-    if (guestsAllowed) {
-      setError(null);
-      setShowGuestForm("TENTATIVE");
-      return;
-    }
     setError(null);
     setSubmittingAction("TENTATIVE");
     try {
@@ -188,7 +188,7 @@ export function RsvpControls({ currentStatus, editable, readOnlyLabel, onSubmit,
         // structure above — a revealed form with Cancel/Submit, submit only
         // on confirmation.
         <View>
-          <Text style={[styles.label, themed.label]}>Number of guests</Text>
+          <Text style={[styles.label, themed.label]}>Number of guests (not including yourself)</Text>
           <TextInput
             style={[styles.input, themed.input, styles.guestCountInput]}
             value={guestCount}

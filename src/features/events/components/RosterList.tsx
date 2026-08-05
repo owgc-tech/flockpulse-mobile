@@ -58,6 +58,12 @@ export function RosterList({ entries }: RosterListProps) {
           <View style={styles.rowHeader}>
             <Text style={[styles.name, themed.name]}>
               {entry.first_name} {entry.last_name}
+              {/* DIP-FP-189-mobile-adj-1: generic — any response with a
+                  positive guest_count gets a suffix, not special-cased by
+                  response type. Web's tightened rsvps_guest_count_status_check
+                  makes this a no-op for non-Yes responses going forward,
+                  rather than something this component needs to enforce. */}
+              {entry.guest_count && entry.guest_count > 0 ? ` +${entry.guest_count}` : ""}
             </Text>
             <Text style={[styles.response, responseColors[entry.response]]}>
               {RESPONSE_LABELS[entry.response]}
