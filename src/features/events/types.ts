@@ -157,23 +157,35 @@ export interface RosterEntry {
 // stopped writing prayer_leader_member_id/food_assignment here, and
 // DIP-FP-161-4 dropped the underlying columns entirely (removed from
 // MyEvent/CreatedEvent/UpdatedEvent too).
+// DIP-FP-191-mobile-adj-3: endDatetime/locationName/locationAddress/target
+// are now optional here even though web's POST /api/events route still
+// requires all four truthy in the request body (a pre-RPC MISSING_FIELD
+// check, confirmed live — insert_event_with_audit force-overrides them for
+// Announcement-type events regardless of what's sent). create.tsx still
+// sends placeholder values for Announcement submissions to satisfy that
+// check; the type going optional reflects that Announcement submissions are
+// structurally different, not that these fields can actually be omitted.
 export interface CreateEventInput {
   eventTypeId: string;
   name: string;
   startDatetime: string;
-  endDatetime: string;
-  locationName: string;
-  locationAddress: string;
+  endDatetime?: string;
+  locationName?: string;
+  locationAddress?: string;
   locationUrl?: string;
   onlineMeetingResourceId?: string;
   onlineMeetingUrl?: string;
   onlineMeetingPlatformLabel?: string;
-  target: EventTargetSelector;
+  target?: EventTargetSelector;
   talkId?: string;
   // DIP-FP-132-FP-133-FP-134: per-event RSVP closure override, in days
   // before start_datetime. Omitted (not sent) falls back to the tenant
   // default — confirmed live against POST /api/events's route handler.
   rsvpClosureDays?: number;
+  // DIP-FP-191-mobile-adj-3: only meaningful for the Announcement system
+  // type — confirmed against web's merged PR #151's announcementBody field
+  // name on the same route.
+  announcementBody?: string;
 }
 
 // POST /api/events success response — confirmed live. status is always

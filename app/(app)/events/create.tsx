@@ -359,6 +359,8 @@ export default function CreateEventScreen() {
   const [onlineMeetingPlatformLabel, setOnlineMeetingPlatformLabel] = useState("");
   const [onlineMeetingUrl, setOnlineMeetingUrl] = useState("");
   const [target, setTarget] = useState<TargetSelection>(EMPTY_SELECTION);
+  // DIP-FP-191-mobile-adj-3: only meaningful when isAnnouncement below.
+  const [announcementBody, setAnnouncementBody] = useState("");
   const [talkId, setTalkId] = useState<string | undefined>(undefined);
   const [talkLabel, setTalkLabel] = useState<string | undefined>(undefined);
   // DIP-FP-161-3-task-wiring: replaces the old dedicated prayerLeader/
@@ -406,6 +408,13 @@ export default function CreateEventScreen() {
     setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
   };
 
+  // DIP-FP-191-mobile-adj-3: system_key === 'ANNOUNCEMENT' confirmed live
+  // against web's event-types repository — same signal EventListItem.tsx/
+  // AnnouncementSection already use elsewhere in this app (see EventType's
+  // doc comment for the note on web's own admin form using `code` for this
+  // same check instead).
+  const isAnnouncement = eventTypes.find((t) => t.id === eventTypeId)?.system_key === "ANNOUNCEMENT";
+
   const openDateTimePicker = (which: "start" | "end") => {
     const current = (which === "start" ? startDatetime : endDatetime) ?? new Date();
     if (Platform.OS === "android") {
@@ -437,47 +446,77 @@ export default function CreateEventScreen() {
   const handleSubmit = async () => {
     setError(null);
 
-    if (
-      !name.trim() ||
-      !eventTypeId ||
-      !startDatetime ||
-      !endDatetime ||
-      !locationName.trim() ||
-      !locationAddress.trim()
-    ) {
-      setError("Please fill in all required fields.");
-      return;
-    }
-    if (target.group_ids.length === 0 && target.member_ids.length === 0) {
-      setError("Please select at least one target group or member.");
-      return;
+    // DIP-FP-191-mobile-adj-3: Announcement submissions skip the location/
+    // target requiredness checks entirely — only name/startDatetime (plus
+    // the Announcement Body field, which the DIP's own "Show" bullet labels
+    // required even though its validation bullet didn't explicitly list it)
+    // are meaningful for this type.
+    if (isAnnouncement) {
+      if (!name.trim() || !eventTypeId || !startDatetime || !announcementBody.trim()) {
+        setError("Please fill in all required fields.");
+        return;
+      }
+    } else {
+      if (
+        !name.trim() ||
+        !eventTypeId ||
+        !startDatetime ||
+        !endDatetime ||
+        !locationName.trim() ||
+        !locationAddress.trim()
+      ) {
+        setError("Please fill in all required fields.");
+        return;
+      }
+      if (target.group_ids.length === 0 && target.member_ids.length === 0) {
+        setError("Please select at least one target group or member.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
 
     let created: CreatedEvent;
     try {
-      created = await createEvent({
-        eventTypeId,
-        name: name.trim(),
-        startDatetime: startDatetime.toISOString(),
-        endDatetime: endDatetime.toISOString(),
-        locationName: locationName.trim(),
-        locationAddress: locationAddress.trim(),
-        ...(locationUrl.trim() ? { locationUrl: locationUrl.trim() } : {}),
-        ...(meetingMode === "zoom" && onlineMeetingResourceId ? { onlineMeetingResourceId } : {}),
-        ...(meetingMode === "other" && onlineMeetingUrl.trim()
-          ? {
-              onlineMeetingUrl: onlineMeetingUrl.trim(),
-              ...(onlineMeetingPlatformLabel.trim()
-                ? { onlineMeetingPlatformLabel: onlineMeetingPlatformLabel.trim() }
-                : {}),
-            }
-          : {}),
-        target,
-        ...(talkId ? { talkId } : {}),
-        ...(rsvpClosureDays.trim() ? { rsvpClosureDays: Number(rsvpClosureDays.trim()) } : {}),
-      });
+      created = isAnnouncement
+        ? await createEvent({
+            eventTypeId,
+            name: name.trim(),
+            startDatetime: startDatetime!.toISOString(),
+            // DIP Grounding Check: web's POST /api/events still requires
+            // endDatetime/locationName/locationAddress/target truthy in the
+            // request body (a pre-RPC MISSING_FIELD check) even though
+            // insert_event_with_audit force-overrides all of them for
+            // Announcement-type events server-side — these placeholder
+            // values exist purely to satisfy that check, mirroring web's
+            // own EventForm.tsx convention.
+            endDatetime: new Date(startDatetime!.getTime() + 24 * 60 * 60 * 1000).toISOString(),
+            locationName: "Announcement",
+            locationAddress: "N/A",
+            target: EMPTY_SELECTION,
+            announcementBody: announcementBody.trim(),
+          })
+        : await createEvent({
+            eventTypeId,
+            name: name.trim(),
+            startDatetime: startDatetime!.toISOString(),
+            endDatetime: endDatetime!.toISOString(),
+            locationName: locationName.trim(),
+            locationAddress: locationAddress.trim(),
+            ...(locationUrl.trim() ? { locationUrl: locationUrl.trim() } : {}),
+            ...(meetingMode === "zoom" && onlineMeetingResourceId ? { onlineMeetingResourceId } : {}),
+            ...(meetingMode === "other" && onlineMeetingUrl.trim()
+              ? {
+                  onlineMeetingUrl: onlineMeetingUrl.trim(),
+                  ...(onlineMeetingPlatformLabel.trim()
+                    ? { onlineMeetingPlatformLabel: onlineMeetingPlatformLabel.trim() }
+                    : {}),
+                }
+              : {}),
+            target,
+            ...(talkId ? { talkId } : {}),
+            ...(rsvpClosureDays.trim() ? { rsvpClosureDays: Number(rsvpClosureDays.trim()) } : {}),
+          });
     } catch (err) {
       if (err instanceof ApiError && err.code === "MEETING_RESOURCE_CONFLICT" && err.conflict) {
         const c = err.conflict;
@@ -600,15 +639,41 @@ export default function CreateEventScreen() {
         <Text style={themed.inputText}>{formatDateTime(startDatetime)}</Text>
       </Pressable>
 
-      <Text style={[styles.label, themed.label]}>End</Text>
-      <Pressable
-        style={[styles.input, themed.input]}
-        onPress={() => openDateTimePicker("end")}
-        disabled={isSubmitting}
-        testID="create-event-end"
-      >
-        <Text style={themed.inputText}>{formatDateTime(endDatetime)}</Text>
-      </Pressable>
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-3: mirrors web's own EventForm.tsx —
+        // computed as start + 1 day, matching insert_event_with_audit's own
+        // forced value server-side, not user-editable.
+        <Text style={[styles.label, themed.label]}>
+          End: {startDatetime ? formatDateTime(new Date(startDatetime.getTime() + 24 * 60 * 60 * 1000)) : "Set a start date first"}
+        </Text>
+      ) : (
+        <>
+          <Text style={[styles.label, themed.label]}>End</Text>
+          <Pressable
+            style={[styles.input, themed.input]}
+            onPress={() => openDateTimePicker("end")}
+            disabled={isSubmitting}
+            testID="create-event-end"
+          >
+            <Text style={themed.inputText}>{formatDateTime(endDatetime)}</Text>
+          </Pressable>
+        </>
+      )}
+
+      {isAnnouncement ? (
+        <>
+          <Text style={[styles.label, themed.label]}>Announcement Body</Text>
+          <TextInput
+            style={[styles.input, themed.input, styles.multilineInput]}
+            value={announcementBody}
+            onChangeText={setAnnouncementBody}
+            multiline
+            editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
+            testID="create-event-announcement-body"
+          />
+        </>
+      ) : null}
 
       {/* DIP Grounding Check: display="spinner" fires onChange on every
           wheel tick, not just on a final confirm — committing and closing
@@ -658,148 +723,166 @@ export default function CreateEventScreen() {
         </View>
       </Modal>
 
-      <Text style={[styles.label, themed.label]}>RSVP Closure Override (days, optional)</Text>
-      <TextInput
-        style={[styles.input, themed.input]}
-        value={rsvpClosureDays}
-        onChangeText={setRsvpClosureDays}
-        keyboardType="number-pad"
-        editable={!isSubmitting}
-        placeholder="Blank = tenant default"
-        placeholderTextColor={colors.textMuted}
-        testID="create-event-rsvp-closure-days"
-      />
-
-      <Text style={[styles.label, themed.label]}>Location Name</Text>
-      <TextInput
-        style={[styles.input, themed.input]}
-        value={locationName}
-        onChangeText={setLocationName}
-        editable={!isSubmitting}
-        placeholderTextColor={colors.textMuted}
-        testID="create-event-location-name"
-      />
-
-      <Text style={[styles.label, themed.label]}>Location Address</Text>
-      <TextInput
-        style={[styles.input, themed.input]}
-        value={locationAddress}
-        onChangeText={setLocationAddress}
-        editable={!isSubmitting}
-        placeholderTextColor={colors.textMuted}
-        testID="create-event-location-address"
-      />
-
-      <Text style={[styles.label, themed.label]}>Location URL (optional)</Text>
-      <TextInput
-        style={[styles.input, themed.input]}
-        value={locationUrl}
-        onChangeText={setLocationUrl}
-        editable={!isSubmitting}
-        autoCapitalize="none"
-        placeholderTextColor={colors.textMuted}
-        testID="create-event-location-url"
-      />
-
-      <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>
-      <View style={styles.optionsRow}>
-        {(["none", "zoom", "other"] as const).map((mode) => (
-          <Pressable
-            key={mode}
-            style={[
-              styles.optionButton,
-              themed.optionButton,
-              meetingMode === mode && [styles.optionButtonSelected, themed.optionButtonSelected],
-            ]}
-            onPress={() => setMeetingMode(mode)}
-            disabled={isSubmitting}
-            testID={`create-event-meeting-mode-${mode}`}
-          >
-            <Text style={[styles.optionText, themed.optionText, meetingMode === mode && styles.optionTextSelected]}>
-              {mode === "none" ? "None" : mode === "zoom" ? "Zoom Account" : "Other Platform"}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {meetingMode === "zoom" ? (
-        <MeetingResourcePicker
-          resourceLabel={onlineMeetingResourceLabel}
-          selectedResourceId={onlineMeetingResourceId}
-          onChange={(id, label) => {
-            setOnlineMeetingResourceId(id);
-            setOnlineMeetingResourceLabel(label);
-          }}
-          themed={themed}
-        />
-      ) : null}
-
-      {meetingMode === "other" ? (
+      {!isAnnouncement && (
         <>
-          <Text style={[styles.label, themed.label]}>Platform Name</Text>
+          <Text style={[styles.label, themed.label]}>RSVP Closure Override (days, optional)</Text>
           <TextInput
             style={[styles.input, themed.input]}
-            value={onlineMeetingPlatformLabel}
-            onChangeText={setOnlineMeetingPlatformLabel}
+            value={rsvpClosureDays}
+            onChangeText={setRsvpClosureDays}
+            keyboardType="number-pad"
             editable={!isSubmitting}
-            placeholder="e.g. Google Meet"
+            placeholder="Blank = tenant default"
             placeholderTextColor={colors.textMuted}
-            testID="create-event-meeting-platform-label"
+            testID="create-event-rsvp-closure-days"
           />
 
-          <Text style={[styles.label, themed.label]}>Meeting Link</Text>
+          <Text style={[styles.label, themed.label]}>Location Name</Text>
           <TextInput
             style={[styles.input, themed.input]}
-            value={onlineMeetingUrl}
-            onChangeText={setOnlineMeetingUrl}
+            value={locationName}
+            onChangeText={setLocationName}
+            editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
+            testID="create-event-location-name"
+          />
+
+          <Text style={[styles.label, themed.label]}>Location Address</Text>
+          <TextInput
+            style={[styles.input, themed.input]}
+            value={locationAddress}
+            onChangeText={setLocationAddress}
+            editable={!isSubmitting}
+            placeholderTextColor={colors.textMuted}
+            testID="create-event-location-address"
+          />
+
+          <Text style={[styles.label, themed.label]}>Location URL (optional)</Text>
+          <TextInput
+            style={[styles.input, themed.input]}
+            value={locationUrl}
+            onChangeText={setLocationUrl}
             editable={!isSubmitting}
             autoCapitalize="none"
             placeholderTextColor={colors.textMuted}
-            testID="create-event-meeting-url"
+            testID="create-event-location-url"
           />
-        </>
-      ) : null}
 
-      <GroupMemberChipPicker label="Target Audience" value={target} onChange={setTarget} />
-
-      <FormationTalkPicker
-        talkLabel={talkLabel}
-        onChange={(id, label) => {
-          setTalkId(id);
-          setTalkLabel(label);
-        }}
-        themed={themed}
-      />
-
-      <Text style={[styles.label, themed.label]}>Tasks</Text>
-      {displayedTasks.map((task) => (
-        <GroupMemberChipPicker
-          key={task.id}
-          label={`${task.name} (optional)`}
-          value={taskAssignments[task.id] ?? EMPTY_SELECTION}
-          onChange={(selection) => setTaskAssignment(task.id, selection)}
-          individualOnly={task.individual_only}
-        />
-      ))}
-
-      {availableToAddTasks.length > 0 ? (
-        <>
-          <Text style={[styles.label, themed.label]}>Add Task</Text>
+          <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>
           <View style={styles.optionsRow}>
-            {availableToAddTasks.map((task) => (
+            {(["none", "zoom", "other"] as const).map((mode) => (
               <Pressable
-                key={task.id}
-                style={[styles.optionButton, themed.optionButton]}
-                onPress={() => setAddedTaskIds((prev) => [...prev, task.id])}
+                key={mode}
+                style={[
+                  styles.optionButton,
+                  themed.optionButton,
+                  meetingMode === mode && [styles.optionButtonSelected, themed.optionButtonSelected],
+                ]}
+                onPress={() => setMeetingMode(mode)}
                 disabled={isSubmitting}
-                testID={`create-event-add-task-${task.id}`}
+                testID={`create-event-meeting-mode-${mode}`}
               >
-                <Text style={[styles.optionText, themed.optionText]}>{task.name}</Text>
+                <Text style={[styles.optionText, themed.optionText, meetingMode === mode && styles.optionTextSelected]}>
+                  {mode === "none" ? "None" : mode === "zoom" ? "Zoom Account" : "Other Platform"}
+                </Text>
               </Pressable>
             ))}
           </View>
+
+          {meetingMode === "zoom" ? (
+            <MeetingResourcePicker
+              resourceLabel={onlineMeetingResourceLabel}
+              selectedResourceId={onlineMeetingResourceId}
+              onChange={(id, label) => {
+                setOnlineMeetingResourceId(id);
+                setOnlineMeetingResourceLabel(label);
+              }}
+              themed={themed}
+            />
+          ) : null}
+
+          {meetingMode === "other" ? (
+            <>
+              <Text style={[styles.label, themed.label]}>Platform Name</Text>
+              <TextInput
+                style={[styles.input, themed.input]}
+                value={onlineMeetingPlatformLabel}
+                onChangeText={setOnlineMeetingPlatformLabel}
+                editable={!isSubmitting}
+                placeholder="e.g. Google Meet"
+                placeholderTextColor={colors.textMuted}
+                testID="create-event-meeting-platform-label"
+              />
+
+              <Text style={[styles.label, themed.label]}>Meeting Link</Text>
+              <TextInput
+                style={[styles.input, themed.input]}
+                value={onlineMeetingUrl}
+                onChangeText={setOnlineMeetingUrl}
+                editable={!isSubmitting}
+                autoCapitalize="none"
+                placeholderTextColor={colors.textMuted}
+                testID="create-event-meeting-url"
+              />
+            </>
+          ) : null}
         </>
-      ) : null}
+      )}
+
+      {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-3: purely informational — the real audience
+        // is always server-forced to the tenant's Everyone group regardless
+        // of what's shown here, same as web's own EventForm.tsx.
+        <>
+          <Text style={[styles.label, themed.label]}>Target</Text>
+          <Text style={themed.inputText}>Everyone (this community)</Text>
+        </>
+      ) : (
+        <GroupMemberChipPicker label="Target Audience" value={target} onChange={setTarget} />
+      )}
+
+      {!isAnnouncement && (
+        <>
+          <FormationTalkPicker
+            talkLabel={talkLabel}
+            onChange={(id, label) => {
+              setTalkId(id);
+              setTalkLabel(label);
+            }}
+            themed={themed}
+          />
+
+          <Text style={[styles.label, themed.label]}>Tasks</Text>
+          {displayedTasks.map((task) => (
+            <GroupMemberChipPicker
+              key={task.id}
+              label={`${task.name} (optional)`}
+              value={taskAssignments[task.id] ?? EMPTY_SELECTION}
+              onChange={(selection) => setTaskAssignment(task.id, selection)}
+              individualOnly={task.individual_only}
+            />
+          ))}
+
+          {availableToAddTasks.length > 0 ? (
+            <>
+              <Text style={[styles.label, themed.label]}>Add Task</Text>
+              <View style={styles.optionsRow}>
+                {availableToAddTasks.map((task) => (
+                  <Pressable
+                    key={task.id}
+                    style={[styles.optionButton, themed.optionButton]}
+                    onPress={() => setAddedTaskIds((prev) => [...prev, task.id])}
+                    disabled={isSubmitting}
+                    testID={`create-event-add-task-${task.id}`}
+                  >
+                    <Text style={[styles.optionText, themed.optionText]}>{task.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          ) : null}
+        </>
+      )}
 
       {error ? (
         <Text style={[styles.error, themed.error]} testID="create-event-error">
@@ -847,6 +930,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+  },
+  multilineInput: {
+    minHeight: 100,
+    textAlignVertical: "top",
   },
   optionsRow: {
     flexDirection: "row",

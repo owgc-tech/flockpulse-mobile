@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { Megaphone } from "lucide-react-native";
+import { AnnouncementMarkerIcon } from "@/src/features/events/components/AnnouncementMarkerIcon";
 import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MeetingResource, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -95,7 +95,7 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
     >
       {isAnnouncement ? (
         <View style={styles.announcementMarker} testID={`event-item-announcement-marker-${event.id}`}>
-          <Megaphone size={16} color={colors.accent} />
+          <AnnouncementMarkerIcon size={48} />
         </View>
       ) : null}
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
@@ -143,27 +143,20 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
           </Text>
         </View>
         {isAnnouncement ? (
-          // DIP-FP-191-mobile-adj-2: acknowledged_at now list-level (web's
-          // merged PR #157) — same pill styling convention as the RSVP pill
-          // below, success-tint when acknowledged, warning-tint (muted/
-          // pending, not an error) when not.
-          <View
-            style={[
-              styles.pill,
-              {
-                backgroundColor: (event.acknowledged_at ? colors.success : colors.warning) + "22",
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                { color: event.acknowledged_at ? colors.success : colors.warning },
-              ]}
-            >
-              {event.acknowledged_at ? "Acknowledged" : "Unacknowledged"}
-            </Text>
-          </View>
+          event.acknowledged_at ? (
+            // DIP-FP-191-mobile-adj-2: unchanged — the green pill stays as
+            // the acknowledged state, matching how a responded regular
+            // event keeps its colored status pill.
+            <View style={[styles.pill, { backgroundColor: colors.success + "22" }]}>
+              <Text style={[styles.pillText, { color: colors.success }]}>Acknowledged</Text>
+            </View>
+          ) : (
+            // DIP-FP-191-mobile-adj-3: replaces the amber "Unacknowledged"
+            // pill with text, matching exactly how a not-yet-RSVP'd regular
+            // event shows "Please RSVP now." text rather than a pill —
+            // reuses the same style.
+            <Text style={[styles.rsvpText, themed.rsvpPromptText]}>Please Acknowledge now.</Text>
+          )
         ) : event.rsvp_status ? (
           <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
             <Text style={[styles.pillText, { color: getRsvpStatusColor(colors, event.rsvp_status) }]}>
