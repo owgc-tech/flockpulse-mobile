@@ -151,15 +151,18 @@ export default function MyEventsScreen() {
   // list itself is showing, even if only briefly, unlike Confirmations/
   // Self-Report/My Tasks, which have no local list to derive from and so
   // fetch their own pending-count independently.
-  // DIP-FP-191-mobile-adj-3: fixes a regression against the original FP-191
-  // story's explicit requirement — Announcements always have rsvp_status:
-  // null (they're acknowledged, not RSVP'd to), so isRsvpWindowOpen() alone
-  // (no event_type awareness) was incorrectly counting any SCHEDULED
-  // Announcement with an unexpired rsvp_closure_at into this badge.
+  // DIP-FP-191-mobile-adj-4: reverses adj-3's exclusion — a deliberate
+  // change of direction, not a bug fix. Announcements now contribute to
+  // this combined count via !acknowledged_at alone, with no
+  // isRsvpWindowOpen-style time gating (consistent with "acknowledging is
+  // never gated by time" from the original FP-191 story); every other
+  // event keeps its exact existing rsvp_status/isRsvpWindowOpen logic,
+  // untouched.
   const pendingRsvpCount = useMemo(
     () =>
-      events.filter((e) => !e.rsvp_status && isRsvpWindowOpen(e) && e.event_type?.system_key !== "ANNOUNCEMENT")
-        .length,
+      events.filter((e) =>
+        e.event_type?.system_key === "ANNOUNCEMENT" ? !e.acknowledged_at : !e.rsvp_status && isRsvpWindowOpen(e)
+      ).length,
     [events]
   );
 
