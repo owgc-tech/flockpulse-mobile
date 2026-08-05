@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { AnnouncementMarkerIcon } from "@/src/features/events/components/AnnouncementMarkerIcon";
+import { Megaphone } from "lucide-react-native";
 import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type { EffectiveEventStatus, MeetingResource, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -94,8 +94,11 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
       testID={`event-item-${event.id}`}
     >
       {isAnnouncement ? (
+        // DIP-FP-191-mobile-adj-4: full revert of adj-3's custom two-tone
+        // SVG back to lucide's stock icon, at 2x the original 16 (32) —
+        // not the attempted 3x (48).
         <View style={styles.announcementMarker} testID={`event-item-announcement-marker-${event.id}`}>
-          <AnnouncementMarkerIcon size={48} />
+          <Megaphone size={32} color={colors.accent} />
         </View>
       ) : null}
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
@@ -154,8 +157,8 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
             // DIP-FP-191-mobile-adj-3: replaces the amber "Unacknowledged"
             // pill with text, matching exactly how a not-yet-RSVP'd regular
             // event shows "Please RSVP now." text rather than a pill —
-            // reuses the same style.
-            <Text style={[styles.rsvpText, themed.rsvpPromptText]}>Please Acknowledge now.</Text>
+            // reuses the same style. DIP-FP-191-mobile-adj-4: shortened.
+            <Text style={[styles.rsvpText, themed.rsvpPromptText]}>Please acknowledge.</Text>
           )
         ) : event.rsvp_status ? (
           <View style={[styles.pill, { backgroundColor: getRsvpStatusColor(colors, event.rsvp_status) + "22" }]}>
