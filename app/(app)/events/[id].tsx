@@ -25,6 +25,7 @@ import type {
   MeetingResource,
   MyEvent,
   RosterEntry,
+  RosterResponseValue,
   RsvpStatus,
 } from "@/src/features/events/types";
 import type { EventReminderFormation } from "@/src/features/notifications/types";
@@ -667,6 +668,15 @@ function RosterSection({
 
   return (
     <View>
+      {/* DIP-FP-189-mobile-adj-1: positioned here (before the Invitees
+          heading, still within this component) rather than as a separate
+          top-level section between RsvpSection and RosterSection — the
+          DIP's own rationale is that all four numbers come from "the same
+          roster array already powering the Invitees list below it," which
+          only exists in this component's own `roster` state. Rendering it
+          here reuses that single fetch instead of lifting roster state up
+          or fetching it twice. */}
+      {roster && roster.length > 0 ? <ResponseCountTable roster={roster} themed={themed} /> : null}
       <Text style={[styles.sectionTitle, themed.sectionTitle]}>Invitees</Text>
       {error ? (
         <Text style={[styles.error, themed.error]}>{error}</Text>
@@ -675,6 +685,62 @@ function RosterSection({
       ) : (
         <RosterList entries={roster} />
       )}
+    </View>
+  );
+}
+
+// DIP-FP-189-mobile-adj-1: all four numbers computed client-side by
+// reducing over the roster array — no new endpoint. Guest suffixes are
+// generic (summed for whichever response's entries carry a guest_count),
+// not special-cased to "Yes only" — web's tightened
+// rsvps_guest_count_status_check already makes Tentative's total a no-op
+// going forward, same reasoning as RosterList's per-entry "+N".
+function ResponseCountTable({
+  roster,
+  themed,
+}: {
+  roster: RosterEntry[];
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  const counts = useMemo(() => {
+    const byResponse: Record<RosterResponseValue, { count: number; guestTotal: number }> = {
+      ACCEPTED: { count: 0, guestTotal: 0 },
+      TENTATIVE: { count: 0, guestTotal: 0 },
+      DECLINED: { count: 0, guestTotal: 0 },
+      NOT_RESPONDED: { count: 0, guestTotal: 0 },
+    };
+    for (const entry of roster) {
+      byResponse[entry.response].count += 1;
+      byResponse[entry.response].guestTotal += entry.guest_count ?? 0;
+    }
+    return byResponse;
+  }, [roster]);
+
+  const suffix = (guestTotal: number) => (guestTotal > 0 ? ` +${guestTotal}` : "");
+
+  return (
+    <View style={styles.responseCountTable} testID="response-count-table">
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Response Count</Text>
+      <View style={styles.responseCountRow}>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Accepted</Text>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Tentative</Text>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Declined</Text>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Not Responded</Text>
+      </View>
+      <View style={styles.responseCountRow}>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="response-count-accepted">
+          {counts.ACCEPTED.count}{suffix(counts.ACCEPTED.guestTotal)}
+        </Text>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="response-count-tentative">
+          {counts.TENTATIVE.count}{suffix(counts.TENTATIVE.guestTotal)}
+        </Text>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="response-count-declined">
+          {counts.DECLINED.count}
+        </Text>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="response-count-not-responded">
+          {counts.NOT_RESPONDED.count}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -792,5 +858,24 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  responseCountTable: {
+    marginBottom: 20,
+  },
+  responseCountRow: {
+    flexDirection: "row",
+  },
+  responseCountHeader: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  responseCountValue: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 4,
   },
 });

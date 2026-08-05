@@ -147,6 +147,10 @@ export interface RosterEntry {
   last_name: string;
   response: RosterResponseValue;
   rsvp_reason: string | null;
+  // DIP-FP-189-mobile-adj-1: confirmed against web's merged PR #160 — null
+  // for every non-Yes response, and for Yes responses on events that don't
+  // allow guests.
+  guest_count: number | null;
 }
 
 // Matches flockpulse-web's POST /api/events request body exactly — the
