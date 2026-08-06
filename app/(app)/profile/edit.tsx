@@ -264,6 +264,17 @@ export default function EditProfileScreen() {
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save</Text>}
       </Pressable>
+
+      {/* DIP-FP-186-mobile: change-password is a new sibling screen, not a
+          field folded into this form — mirrors how preferences.tsx is
+          already its own separate screen off the profile menu. */}
+      <Pressable
+        style={styles.changePasswordLink}
+        onPress={() => router.push("/(app)/profile/change-password")}
+        testID="edit-profile-change-password-link"
+      >
+        <Text style={[styles.changePasswordLinkText, themed.backLinkText]}>Change Password</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -371,5 +382,15 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 13,
     marginTop: 16,
+  },
+  changePasswordLink: {
+    alignItems: "center",
+    marginTop: 20,
+    marginBottom: 24,
+  },
+  changePasswordLinkText: {
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
