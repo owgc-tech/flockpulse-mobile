@@ -11,13 +11,18 @@ import {
   submitRsvp,
 } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
-import { acknowledgeAnnouncement } from "@/src/features/announcements/services/announcements.service";
+import {
+  acknowledgeAnnouncement,
+  getAnnouncementRoster,
+} from "@/src/features/announcements/services/announcements.service";
+import type { AnnouncementRosterEntry } from "@/src/features/announcements/services/announcements.service";
 import { notifyAnnouncementAcknowledged } from "@/src/features/self-reports/selfReportRefreshSignal";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import { fetchReminderContext } from "@/src/features/notifications/services/reminderContent.service";
 import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/services/tasks.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
+import { AnnouncementRosterList } from "@/src/features/events/components/AnnouncementRosterList";
 import { getMapUrl, isRsvpWindowOpen } from "@/src/features/events/utils";
 import type {
   EventDetail,
@@ -507,7 +512,15 @@ export default function EventDetailScreen() {
       {showRoster ? (
         <>
           <View style={[styles.divider, themed.divider]} />
-          <RosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} themed={themed} />
+          {/* DIP-FP-191-mobile-adj-5: same ternary pattern already used one
+              section above (AnnouncementSection/RsvpSection) — showRoster
+              still gates the whole section unchanged, isAnnouncement only
+              decides which roster component renders inside it. */}
+          {isAnnouncement ? (
+            <AnnouncementRosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} themed={themed} />
+          ) : (
+            <RosterSection eventId={event.id} refreshTrigger={rosterRefreshTrigger} themed={themed} />
+          )}
         </>
       ) : null}
     </ScrollView>
@@ -685,6 +698,93 @@ function RosterSection({
       ) : (
         <RosterList entries={roster} />
       )}
+    </View>
+  );
+}
+
+// DIP-FP-191-mobile-adj-5: sibling to RosterSection above, not a shared/
+// prop-threaded retrofit of it — RosterEntry's response/rsvp_reason/
+// guest_count fields are meaningless for acknowledgement data, so this
+// reads from the new Announcement-scoped roster endpoint instead
+// (GET /api/announcements/:eventId/roster, FP-191-web-adj-4) via its own
+// AnnouncementRosterEntry type. Same useCallback/useEffect load pattern as
+// RosterSection.
+function AnnouncementRosterSection({
+  eventId,
+  refreshTrigger,
+  themed,
+}: {
+  eventId: string;
+  refreshTrigger: number;
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  const [roster, setRoster] = useState<AnnouncementRosterEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRoster = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await getAnnouncementRoster(eventId);
+      setRoster(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load roster.");
+    }
+  }, [eventId]);
+
+  useEffect(() => {
+    loadRoster();
+  }, [loadRoster, refreshTrigger]);
+
+  return (
+    <View>
+      {roster && roster.length > 0 ? <AcknowledgementCountTable roster={roster} themed={themed} /> : null}
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Recipients</Text>
+      {error ? (
+        <Text style={[styles.error, themed.error]}>{error}</Text>
+      ) : !roster ? (
+        <ActivityIndicator />
+      ) : (
+        <AnnouncementRosterList entries={roster} />
+      )}
+    </View>
+  );
+}
+
+// DIP-FP-191-mobile-adj-5: two columns only (Acknowledged / Not Responded),
+// computed by reducing over acknowledged_at !== null — no guest logic,
+// mirrors ResponseCountTable's shape below otherwise.
+function AcknowledgementCountTable({
+  roster,
+  themed,
+}: {
+  roster: AnnouncementRosterEntry[];
+  themed: ReturnType<typeof getThemedStyles>;
+}) {
+  const counts = useMemo(() => {
+    let acknowledged = 0;
+    let notResponded = 0;
+    for (const entry of roster) {
+      if (entry.acknowledged_at !== null) acknowledged += 1;
+      else notResponded += 1;
+    }
+    return { acknowledged, notResponded };
+  }, [roster]);
+
+  return (
+    <View style={styles.responseCountTable} testID="acknowledgement-count-table">
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Response Count</Text>
+      <View style={styles.responseCountRow}>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Acknowledged</Text>
+        <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Not Responded</Text>
+      </View>
+      <View style={styles.responseCountRow}>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="acknowledgement-count-acknowledged">
+          {counts.acknowledged}
+        </Text>
+        <Text style={[styles.responseCountValue, themed.fieldValue]} testID="acknowledgement-count-not-responded">
+          {counts.notResponded}
+        </Text>
+      </View>
     </View>
   );
 }
