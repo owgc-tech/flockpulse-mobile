@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -74,6 +75,7 @@ function getThemedStyles(colors: ThemeColors) {
     optionRowSelected: { backgroundColor: colors.backgroundSecondary },
     optionLabel: { color: colors.text },
     optionLabelSelected: { color: colors.accent },
+    switchCaption: { color: colors.textSecondary },
   });
 }
 
@@ -385,6 +387,8 @@ export default function EditEventScreen() {
       ? String(initialEvent.rsvp_closure_days)
       : ""
   );
+  // DIP-FP-189-adj-1: mirrors web's EventForm.tsx "Guests Allowed" checkbox.
+  const [guestsAllowed, setGuestsAllowed] = useState(initialEvent.guests_allowed ?? false);
   const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">(
     initialEvent.online_meeting_resource_id ? "zoom" : initialEvent.online_meeting_url ? "other" : "none"
   );
@@ -492,6 +496,15 @@ export default function EditEventScreen() {
     setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
   };
 
+  // DIP-FP-189-adj-1 addition, not in the DIP's original file list: this
+  // screen had no isAnnouncement concept at all before this DIP — unlike
+  // create.tsx, none of its fields (location, meeting, target, talk, tasks)
+  // are Announcement-conditional today. That's a real, broader pre-existing
+  // gap this DIP doesn't fix (out of scope — see PR description); this
+  // derivation exists solely to gate the new Guests Allowed Switch below,
+  // mirroring create.tsx's exact check.
+  const isAnnouncement = eventTypes.find((t) => t.id === eventTypeId)?.system_key === "ANNOUNCEMENT";
+
   useEffect(() => {
     if (!initialEvent.online_meeting_resource_id) return;
     listMeetingResources()
@@ -572,6 +585,7 @@ export default function EditEventScreen() {
         target,
         talkId: talkId ?? null,
         rsvpClosureDays: rsvpClosureDays.trim() ? Number(rsvpClosureDays.trim()) : null,
+        guestsAllowed,
       });
 
       // DIP-FP-161-3-task-wiring: task assignments are a separate resource
@@ -756,6 +770,27 @@ export default function EditEventScreen() {
         testID="edit-event-rsvp-closure-days"
       />
 
+      {!isAnnouncement && (
+        // DIP-FP-189-adj-1: mirrors web's EventForm.tsx placement/copy —
+        // gated on the isAnnouncement derivation added above, since this
+        // field (unlike create.tsx's RSVP Closure Override) had no
+        // existing guard to sit next to here.
+        <View style={styles.switchRow}>
+          <Text style={[styles.label, themed.label, styles.switchLabel]}>
+            Guests Allowed{" "}
+            <Text style={[styles.switchCaption, themed.switchCaption]}>
+              (members can RSVP with a guest headcount)
+            </Text>
+          </Text>
+          <Switch
+            value={guestsAllowed}
+            onValueChange={setGuestsAllowed}
+            disabled={isSubmitting}
+            testID="edit-event-guests-allowed"
+          />
+        </View>
+      )}
+
       <Text style={[styles.label, themed.label]}>Location Name</Text>
       <TextInput
         style={[styles.input, themed.input]}
@@ -919,6 +954,21 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontSize: 15,
     fontWeight: "600",
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  switchLabel: {
+    flex: 1,
+    marginTop: 0,
+    marginRight: 12,
+  },
+  switchCaption: {
+    fontSize: 13,
+    fontWeight: "400",
   },
   label: {
     fontSize: 14,
