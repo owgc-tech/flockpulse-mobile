@@ -7,6 +7,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -72,6 +73,7 @@ function getThemedStyles(colors: ThemeColors) {
     optionRowSelected: { backgroundColor: colors.backgroundSecondary },
     optionLabel: { color: colors.text },
     optionLabelSelected: { color: colors.accent },
+    switchCaption: { color: colors.textSecondary },
   });
 }
 
@@ -353,6 +355,8 @@ export default function CreateEventScreen() {
   // value without fighting controlled-input semantics, same as `code` in
   // MfaVerifyForm.
   const [rsvpClosureDays, setRsvpClosureDays] = useState("");
+  // DIP-FP-189-adj-1: mirrors web's EventForm.tsx "Guests Allowed" checkbox.
+  const [guestsAllowed, setGuestsAllowed] = useState(false);
   const [meetingMode, setMeetingMode] = useState<"none" | "zoom" | "other">("none");
   const [onlineMeetingResourceId, setOnlineMeetingResourceId] = useState<string | undefined>(undefined);
   const [onlineMeetingResourceLabel, setOnlineMeetingResourceLabel] = useState<string | undefined>(undefined);
@@ -516,6 +520,7 @@ export default function CreateEventScreen() {
             target,
             ...(talkId ? { talkId } : {}),
             ...(rsvpClosureDays.trim() ? { rsvpClosureDays: Number(rsvpClosureDays.trim()) } : {}),
+            guestsAllowed,
           });
     } catch (err) {
       if (err instanceof ApiError && err.code === "MEETING_RESOURCE_CONFLICT" && err.conflict) {
@@ -737,6 +742,24 @@ export default function CreateEventScreen() {
             testID="create-event-rsvp-closure-days"
           />
 
+          {/* DIP-FP-189-adj-1: mirrors web's EventForm.tsx placement/copy —
+              plain Switch, no design-system precedent exists for this yet
+              in this codebase. */}
+          <View style={styles.switchRow}>
+            <Text style={[styles.label, themed.label, styles.switchLabel]}>
+              Guests Allowed{" "}
+              <Text style={[styles.switchCaption, themed.switchCaption]}>
+                (members can RSVP with a guest headcount)
+              </Text>
+            </Text>
+            <Switch
+              value={guestsAllowed}
+              onValueChange={setGuestsAllowed}
+              disabled={isSubmitting}
+              testID="create-event-guests-allowed"
+            />
+          </View>
+
           <Text style={[styles.label, themed.label]}>Location Name</Text>
           <TextInput
             style={[styles.input, themed.input]}
@@ -916,6 +939,21 @@ const styles = StyleSheet.create({
     color: "#2563eb",
     fontSize: 15,
     fontWeight: "600",
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 16,
+  },
+  switchLabel: {
+    flex: 1,
+    marginTop: 0,
+    marginRight: 12,
+  },
+  switchCaption: {
+    fontSize: 13,
+    fontWeight: "400",
   },
   label: {
     fontSize: 14,

@@ -190,6 +190,12 @@ export interface CreateEventInput {
   // type — confirmed against web's merged PR #151's announcementBody field
   // name on the same route.
   announcementBody?: string;
+  // DIP-FP-189-adj-1: mirrors web's EventForm.tsx "Guests Allowed" checkbox
+  // — confirmed live against POST /api/events, which already destructures
+  // and forwards this camelCase field. Omitted (not sent) for
+  // Announcement-type events, same reasoning as announcementBody being
+  // meaningless for non-Announcement events above.
+  guestsAllowed?: boolean;
 }
 
 // POST /api/events success response — confirmed live. status is always
@@ -254,6 +260,11 @@ export interface UpdateEventInput {
   // to the tenant default, matching PATCH /api/events/:id's JSONB
   // key-presence patch handling confirmed live.
   rsvpClosureDays: number | null;
+  // DIP-FP-189-adj-1: always sent (never omitted), same convention as
+  // every other field on this type — confirmed live against
+  // PATCH /api/events/:id, which already destructures and forwards this
+  // camelCase field.
+  guestsAllowed: boolean;
 }
 
 // PATCH /api/events/:id success response — confirmed live against
