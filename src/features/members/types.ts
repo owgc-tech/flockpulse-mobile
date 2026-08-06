@@ -19,14 +19,24 @@ export interface MyProfile {
   gender: Gender | null;
   marital_status: MaritalStatus | null;
   birthdate: string | null;
+  // DIP-FP-192-mobile: confirmed live against getMyProfile() — role and
+  // role_catalog_entry_id are the raw selected columns, role_display_name
+  // is resolved server-side from them (FP-192-web's role catalog). None of
+  // the three are returned by updateMyProfile()'s PATCH response — see
+  // UpdatedProfile below.
+  role: string;
+  role_catalog_entry_id: string | null;
+  role_display_name: string;
   groups: MemberGroup[];
 }
 
 // PATCH /api/members/me's success response — same base fields as MyProfile
 // but does NOT include `groups` (not selected server-side on the update
-// query). Kept as its own type so callers can't assume group data survives
+// query) or role/role_catalog_entry_id/role_display_name (confirmed live —
+// updateMyProfile()'s .select() only has the five profile-edit fields).
+// Kept as its own type so callers can't assume group or role data survives
 // an update response.
-export type UpdatedProfile = Omit<MyProfile, "groups">;
+export type UpdatedProfile = Omit<MyProfile, "groups" | "role" | "role_catalog_entry_id" | "role_display_name">;
 
 // Confirmed live: this request body is camelCase (firstName/lastName/
 // maritalStatus), unlike every other endpoint in this app which uses

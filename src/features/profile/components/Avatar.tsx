@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { supabase } from "@/src/lib/supabase";
-import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signOut } from "@/src/features/auth/services/auth.service";
 import { fetchMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { MyProfile } from "@/src/features/members/types";
@@ -16,20 +14,6 @@ function getInitials(firstName: string, lastName: string): string {
   const initials = `${first}${last}`;
   return initials || "?";
 }
-
-// FP-96-FP-97-adj-1: was missing the four roles FP-113-web added on the
-// backend (SR_COORDINATOR/COORDINATOR/COMMUNITY_SERVANT/PASTORAL_LEADER) —
-// those accounts fell through to the raw role string via the ?? role
-// fallback below instead of a proper label.
-const ROLE_LABELS: Record<string, string> = {
-  ADMIN: "Admin",
-  SR_COORDINATOR: "Sr. Coordinator",
-  COORDINATOR: "Coordinator",
-  COMMUNITY_SERVANT: "Community Servant",
-  LEADER: "Leader",
-  PASTORAL_LEADER: "Pastoral Leader",
-  MEMBER: "Member",
-};
 
 // FP-118 round 2 Grounding Check: this now sits inside CommunityBanner
 // (whose own height varies by device via the safe-area inset) rather than
@@ -62,7 +46,6 @@ function getThemedStyles(colors: ThemeColors) {
 // this badge, not a navigated screen (only "Edit Profile" pushes a real
 // route). Owns the profile fetch and the overlay's own open/close state.
 export function Avatar() {
-  const { session } = useSession();
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
@@ -78,18 +61,8 @@ export function Avatar() {
       });
   }, []);
 
-  // FP-96-FP-97-adj-1: forces a session refresh on open rather than waiting
-  // for the natural token-refresh cycle, so a role change made on web shows
-  // up here promptly. Best-effort — useSession() already listens for
-  // TOKEN_REFRESHED and updates session.user.app_metadata.role reactively
-  // once this resolves; if it fails, the card still shows whatever role is
-  // in the current session, which is no worse than before this change.
   const handleOpenProfile = () => {
     setIsOpen(true);
-    supabase.auth.refreshSession().catch(() => {
-      // Best-effort — if this fails, the card still shows whatever role
-      // is in the current session; no need to block opening over it.
-    });
   };
 
   const handleEditProfile = () => {
@@ -109,8 +82,13 @@ export function Avatar() {
   };
 
   const initials = profile ? getInitials(profile.first_name, profile.last_name) : "";
-  const role = session?.user.app_metadata?.role;
-  const roleLabel = typeof role === "string" ? (ROLE_LABELS[role] ?? role) : "";
+  // DIP-FP-192-mobile: reads the server-resolved role_display_name
+  // (FP-192-web's role catalog) instead of deriving a label from the JWT
+  // session claim via a duplicate hardcoded map. fetchMyProfile() is
+  // deliberately never cached (see its own doc comment), so a role change
+  // made on web is already picked up on next overlay-open with no session
+  // refresh needed.
+  const roleLabel = profile?.role_display_name ?? "";
 
   return (
     <>
