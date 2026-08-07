@@ -1,4 +1,7 @@
-import { useNavigation, useNavigationState } from "@react-navigation/native";
+// DIP-FP-179-mobile: @react-navigation/native is no longer a standalone
+// installable package as of expo-router 57 — same finding as
+// AnimatedTabBar.tsx's own import (see its comment for the full grounding).
+import { useNavigation, useNavigationState } from "expo-router/build/react-navigation/native";
 import { useVisibleTabRouteNames } from "@/src/features/navigation/visibleTabRouteNamesStore";
 
 interface SwipeTabNavigation {

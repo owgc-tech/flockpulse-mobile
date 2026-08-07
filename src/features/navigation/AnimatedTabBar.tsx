@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from "react-native";
-import type { BottomTabBarProps, BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
+// DIP-FP-179-mobile: @react-navigation/bottom-tabs is no longer a
+// standalone installable package as of expo-router 57 — confirmed live,
+// it's fully vendored internally (expo-router's own package.json lists no
+// @react-navigation/* dependency or peerDependency at all anymore).
+// expo-router re-exports the identical types/API from this build path
+// (confirmed against its own .d.ts — BottomTabBarProps/
+// BottomTabNavigationOptions are exported unchanged); no exports map
+// restricts this deep import, and there is no shallower public alias for
+// it. A real architectural change surfaced by this SDK bump, not a rename.
+import type { BottomTabBarProps, BottomTabNavigationOptions } from "expo-router/build/react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import { Calendar, ChartColumn, CircleCheck, ClipboardCheck, ListChecks } from "lucide-react-native";
 import { useThemeColors } from "@/src/theme/useThemeColors";

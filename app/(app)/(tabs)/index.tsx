@@ -521,7 +521,7 @@ const styles = StyleSheet.create({
     color: "#555",
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "transparent",
   },
   monthCard: {
