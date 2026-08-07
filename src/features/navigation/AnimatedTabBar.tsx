@@ -5,6 +5,7 @@ import { BlurView } from "expo-blur";
 import { Calendar, ChartColumn, CircleCheck, ClipboardCheck, ListChecks } from "lucide-react-native";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import { darkColors } from "@/src/theme/colors";
+import { setVisibleTabRouteNames } from "@/src/features/navigation/visibleTabRouteNamesStore";
 
 // DIP-FP-155: JS-based approximation of Liquid Glass tabs — an oval
 // container, SVG icons, and a translucent pill that slides behind the
@@ -43,7 +44,12 @@ const ALWAYS_ACCENT_ROUTES = new Set(["dashboard/index"]);
 // override returning null), the same style hint the *default* tab bar reads
 // to hide its button. A custom tabBar must check this itself or the hidden
 // route renders anyway.
-function isRouteHidden(options: BottomTabNavigationOptions): boolean {
+// DIP-FP-194-mobile: exported so useSwipeTabNavigation.ts can reuse this
+// exact check rather than re-deriving "is this tab visible" logic —
+// swiping toward Confirmations must be a no-op for Member-tier the same
+// way tapping it already is (there's no tab button to tap in the first
+// place), not a second, slightly-different implementation of this rule.
+export function isRouteHidden(options: BottomTabNavigationOptions): boolean {
   const flatStyle = StyleSheet.flatten(options.tabBarItemStyle);
   return flatStyle?.display === "none";
 }
@@ -60,6 +66,20 @@ export function AnimatedTabBar({ state, descriptors, navigation, insets }: Botto
   const visibleRoutes = state.routes
     .map((route, index) => ({ route, index }))
     .filter(({ route }) => !isRouteHidden(descriptors[route.key].options));
+
+  // DIP-FP-194-mobile: this is the one place that legitimately has
+  // descriptors (only ever handed to the tabBar render prop) — publishes
+  // the already-computed visible-route-name list so
+  // useSwipeTabNavigation.ts (called from inside a tab screen, which has
+  // no access to descriptors/options at all) can reuse it as its single
+  // source of truth instead of a second, unreachable computation. Keyed on
+  // the joined name list, not `visibleRoutes` itself, so this only
+  // publishes when the actual visible set changes (e.g. role-driven
+  // Confirmations visibility), not on every render.
+  const visibleRouteNamesKey = visibleRoutes.map(({ route }) => route.name).join(",");
+  useEffect(() => {
+    setVisibleTabRouteNames(visibleRouteNamesKey ? visibleRouteNamesKey.split(",") : []);
+  }, [visibleRouteNamesKey]);
 
   const activeEntry = visibleRoutes.find(({ index }) => index === state.index);
 

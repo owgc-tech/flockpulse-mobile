@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
+import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import { listMeetingResources, listMyEvents } from "@/src/features/events/services/events.service";
 import { consumePendingEventsRefresh } from "@/src/features/events/eventListRefreshSignal";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
@@ -377,6 +378,7 @@ export default function MyEventsScreen() {
   }, []);
 
   return (
+    <SwipeableTabScreen>
     <View style={[styles.container, themed.container]}>
       <Modal
         visible={isMonthPickerOpen}
@@ -489,6 +491,7 @@ export default function MyEventsScreen() {
         </Pressable>
       ) : null}
     </View>
+    </SwipeableTabScreen>
   );
 }
 

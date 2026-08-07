@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import {
   listPendingConfirmations,
   submitConfirmation,
@@ -93,6 +94,7 @@ export default function ConfirmationsScreen() {
   };
 
   return (
+    <SwipeableTabScreen>
     <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
@@ -119,6 +121,7 @@ export default function ConfirmationsScreen() {
         />
       )}
     </View>
+    </SwipeableTabScreen>
   );
 }
 
