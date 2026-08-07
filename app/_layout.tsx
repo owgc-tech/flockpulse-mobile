@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { StyleSheet, useColorScheme } from "react-native";
 import { router, Stack } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
@@ -91,10 +92,23 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <ThemePreferenceProvider>
-        <RootLayoutContent />
-      </ThemePreferenceProvider>
-    </SafeAreaProvider>
+    // DIP-FP-194-mobile: required one-time setup for
+    // react-native-gesture-handler to function at all — must wrap the whole
+    // app, outermost, per the library's own setup docs. Needs a real native
+    // rebuild (new native module), not deliverable via the existing OTA
+    // update workflow.
+    <GestureHandlerRootView style={styles.gestureRoot}>
+      <SafeAreaProvider>
+        <ThemePreferenceProvider>
+          <RootLayoutContent />
+        </ThemePreferenceProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  gestureRoot: {
+    flex: 1,
+  },
+});

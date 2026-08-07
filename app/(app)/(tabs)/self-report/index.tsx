@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import { submitSelfReport, listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
 import type { PendingSelfReportRow } from "@/src/features/self-reports/types";
 import { syncSelfReportBadge } from "@/src/features/notifications/services/selfReportBadge.service";
@@ -109,6 +110,7 @@ export default function SelfReportTabScreen() {
   };
 
   return (
+    <SwipeableTabScreen>
     <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
@@ -139,6 +141,7 @@ export default function SelfReportTabScreen() {
         />
       )}
     </View>
+    </SwipeableTabScreen>
   );
 }
 

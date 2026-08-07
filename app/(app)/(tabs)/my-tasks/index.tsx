@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import { listMyTaskAssignments } from "@/src/features/tasks/services/tasks.service";
 import { syncMyTasksBadge } from "@/src/features/notifications/services/myTasksBadge.service";
 import type { MyTaskAssignment } from "@/src/features/tasks/types";
@@ -93,6 +94,7 @@ export default function MyTasksScreen() {
   };
 
   return (
+    <SwipeableTabScreen>
     <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
@@ -128,6 +130,7 @@ export default function MyTasksScreen() {
         />
       )}
     </View>
+    </SwipeableTabScreen>
   );
 }
 

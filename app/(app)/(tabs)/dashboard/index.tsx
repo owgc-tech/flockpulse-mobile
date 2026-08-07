@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import {
   getDashboardStats,
   getDefaultDashboard,
@@ -458,23 +459,33 @@ export default function DashboardScreen() {
     }
   };
 
+  // DIP-FP-194-mobile: this screen has three separate top-level return
+  // points (unlike the other four tab screens, which each have one return
+  // with internal ternary branches) — all three get wrapped, not just the
+  // main one, so swipe still works while the dashboard is loading or empty
+  // rather than only once content has loaded.
   if (isLoading) {
     return (
+      <SwipeableTabScreen>
       <View style={[styles.container, themed.container, styles.center]}>
         <ActivityIndicator />
       </View>
+      </SwipeableTabScreen>
     );
   }
 
   if (!hasAnyEvents) {
     return (
+      <SwipeableTabScreen>
       <View style={[styles.container, themed.container, styles.center]}>
         <Text style={themed.empty}>No events to show yet.</Text>
       </View>
+      </SwipeableTabScreen>
     );
   }
 
   return (
+    <SwipeableTabScreen>
     <ScrollView style={[styles.container, themed.container]} contentContainerStyle={styles.content}>
       {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
 
@@ -517,6 +528,7 @@ export default function DashboardScreen() {
         <StatsCards stats={stats} themed={themed} />
       ) : null}
     </ScrollView>
+    </SwipeableTabScreen>
   );
 }
 
