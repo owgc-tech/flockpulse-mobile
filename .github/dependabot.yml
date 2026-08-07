@@ -6,6 +6,18 @@ updates:
       interval: "weekly"
     target-branch: "dev"
     open-pull-requests-limit: 10
+    # DIP-FP-179-mobile: expo/expo-*/react-native must move together as one
+    # mutually-compatible SDK version set — Dependabot proposing them as
+    # separate PRs (as it did for react-native, expo, expo-router,
+    # expo-notifications, each individually) produces individually-broken
+    # PRs no one of which reflects a real, installable combination. Grouped
+    # so a future SDK bump arrives as one coordinated PR instead.
+    groups:
+      expo-ecosystem:
+        patterns:
+          - "expo"
+          - "expo-*"
+          - "react-native"
 
   - package-ecosystem: "github-actions"
     directory: "/"

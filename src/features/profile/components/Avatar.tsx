@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "transparent",
   },
   cardWrapper: {

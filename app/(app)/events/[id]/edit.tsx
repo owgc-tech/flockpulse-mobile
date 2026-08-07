@@ -1063,7 +1063,7 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   iosPickerBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.3)",
   },
   iosPickerCard: {
