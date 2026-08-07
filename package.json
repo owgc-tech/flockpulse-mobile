@@ -10,7 +10,7 @@
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-linking": "~8.0.12",
-    "expo-local-authentication": "~17.0.8",
+    "expo-local-authentication": "~57.0.2",
     "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.24",
     "expo-secure-store": "~15.0.8",
