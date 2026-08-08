@@ -1,5 +1,15 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { StyleSheet, useWindowDimensions } from "react-native";
+// FP-195-mobile-adj-1: unlike useNavigation/useNavigationState (FP-179's
+// finding — genuinely no top-level expo-router export), useIsFocused is
+// re-exported from expo-router's own public entry point (build/exports.ts)
+// — confirmed live, and the vendored path's own .d.ts marks it
+// `@deprecated Import useIsFocused from 'expo-router' instead`. This repo
+// already imports useFocusEffect from "expo-router" in three tab screens
+// (app/(app)/(tabs)/index.tsx, my-tasks/index.tsx, self-report/index.tsx) —
+// this follows that same established convention rather than the deep
+// react-navigation/native path the DIP's Grounding Check assumed.
+import { useIsFocused } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSwipeTabNavigation } from "@/src/features/navigation/useSwipeTabNavigation";
@@ -39,6 +49,21 @@ export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
   const { onSwipeLeft, onSwipeRight } = useSwipeTabNavigation();
   const { width: screenWidth } = useWindowDimensions();
   const translateX = useSharedValue(0);
+  const isFocused = useIsFocused();
+
+  // FP-195-mobile-adj-1: resets on focus rather than immediately after the
+  // outgoing animation's own completion callback fires — tab screens stay
+  // mounted (not unmounted) when inactive, so a reset tied only to "the
+  // navigation call was queued" isn't coordinated with when the tab switch
+  // has actually visually finished, producing a flash of this screen
+  // snapping back to center while still on top. Resetting on this screen's
+  // own focus instead guarantees it's always at rest by the time it's
+  // actually visible again, regardless of how or when it was last left.
+  useEffect(() => {
+    if (isFocused) {
+      translateX.value = 0;
+    }
+  }, [isFocused, translateX]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -68,18 +93,15 @@ export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
 
       translateX.value = withTiming(offscreenTarget, { duration: SLIDE_OUT_DURATION_MS }, (finished) => {
         if (!finished) return;
+        // FP-195-mobile-adj-1: no longer resets translateX here — the
+        // isFocused effect above is the single source of truth for
+        // resetting position now (see its own comment for why the reset
+        // needed to move off this completion callback).
         if (isSwipeLeft) {
           runOnJS(onSwipeLeft)();
         } else {
           runOnJS(onSwipeRight)();
         }
-        // Reset locally once this screen is off-screen behind the newly
-        // focused tab — each SwipeableTabScreen instance owns its own
-        // translateX (tab screens stay mounted, per FP-194's own
-        // architecture), so this doesn't affect any other tab's position,
-        // and by the time it renders at 0 again the user is already looking
-        // at the newly-focused tab instead.
-        translateX.value = 0;
       });
     });
 
