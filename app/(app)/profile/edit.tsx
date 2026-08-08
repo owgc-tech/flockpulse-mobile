@@ -275,6 +275,17 @@ export default function EditProfileScreen() {
       >
         <Text style={[styles.changePasswordLinkText, themed.backLinkText]}>Change Password</Text>
       </Pressable>
+
+      {/* DIP-FP-187-mobile: same sibling-screen pattern as Change Password
+          above, but destructive-styled (colors.danger, same precedent as
+          Avatar.tsx's own Sign Out link) given its irreversibility. */}
+      <Pressable
+        style={styles.deleteAccountLink}
+        onPress={() => router.push("/(app)/profile/delete-account")}
+        testID="edit-profile-delete-account-link"
+      >
+        <Text style={[styles.deleteAccountLinkText, themed.error]}>Delete My Account</Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -390,6 +401,15 @@ const styles = StyleSheet.create({
   },
   changePasswordLinkText: {
     color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  deleteAccountLink: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  deleteAccountLinkText: {
+    color: "#c0392b",
     fontSize: 15,
     fontWeight: "600",
   },

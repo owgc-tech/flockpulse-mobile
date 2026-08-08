@@ -19,3 +19,13 @@ export async function updateMyProfile(patch: UpdateMyProfileInput): Promise<Upda
     body: JSON.stringify(patch),
   });
 }
+
+// FP-187-mobile: no target-id parameter — the endpoint derives userId/
+// tenantId/memberId entirely from the caller's own JWT, so this is
+// structurally incapable of deleting anyone but the signed-in caller.
+// Callers can branch on err.code (INVALID_STATE_TRANSITION /
+// AUTH_DELETE_FAILED) and err.assignedMemberCount/ownedGroupCount/
+// ownedEventCount via ApiError — see src/lib/api.ts.
+export async function deleteOwnAccount(): Promise<void> {
+  await apiFetch<{ deleted: true }>("/api/members/me", { method: "DELETE" });
+}
