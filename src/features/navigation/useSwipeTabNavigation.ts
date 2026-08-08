@@ -7,6 +7,13 @@ import { useVisibleTabRouteNames } from "@/src/features/navigation/visibleTabRou
 interface SwipeTabNavigation {
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
+  // FP-195-mobile-adj-2: exposes the same boundary check navigateByOffset()
+  // already used internally to decide whether to no-op, so
+  // SwipeableTabScreen.tsx can skip the off-screen slide animation entirely
+  // when there's no adjacent tab to land on — see its own comment for why
+  // that matters (a stuck-blank-screen bug otherwise).
+  canSwipeLeft: boolean;
+  canSwipeRight: boolean;
 }
 
 // DIP-FP-194-mobile: called from within a tab screen — useNavigation()/
@@ -22,13 +29,13 @@ export function useSwipeTabNavigation(): SwipeTabNavigation {
   const currentRouteName = useNavigationState((state) => state.routes[state.index]?.name);
   const visibleRouteNames = useVisibleTabRouteNames();
 
+  const currentIndex = currentRouteName ? visibleRouteNames.indexOf(currentRouteName) : -1;
+
   // Swipe left (finger moves right-to-left) advances forward, same
   // direction convention as iOS home-screen paging/Stories — swipe right
   // goes back. No wraparound at either end, per acceptance criteria: a
   // swipe past the first/last visible tab is simply a no-op.
   const navigateByOffset = (offset: number) => {
-    if (!currentRouteName || visibleRouteNames.length === 0) return;
-    const currentIndex = visibleRouteNames.indexOf(currentRouteName);
     if (currentIndex === -1) return;
 
     const targetIndex = currentIndex + offset;
@@ -43,5 +50,7 @@ export function useSwipeTabNavigation(): SwipeTabNavigation {
   return {
     onSwipeLeft: () => navigateByOffset(1),
     onSwipeRight: () => navigateByOffset(-1),
+    canSwipeLeft: currentIndex !== -1 && currentIndex + 1 < visibleRouteNames.length,
+    canSwipeRight: currentIndex !== -1 && currentIndex - 1 >= 0,
   };
 }

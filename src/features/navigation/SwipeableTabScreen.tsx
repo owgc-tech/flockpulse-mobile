@@ -12,6 +12,7 @@ import { StyleSheet, useWindowDimensions } from "react-native";
 import { useIsFocused } from "expo-router";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import { getLastSwipeDirection, setLastSwipeDirection } from "@/src/features/navigation/lastSwipeDirectionStore";
 import { useSwipeTabNavigation } from "@/src/features/navigation/useSwipeTabNavigation";
 
 // DIP-FP-194-mobile: activeOffsetX/failOffsetY are gesture-handler's own
@@ -46,7 +47,7 @@ interface SwipeableTabScreenProps {
 // and withTiming's completion callback all run on the UI thread as
 // worklets, but navigation.navigate() is JS-thread-only.
 export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
-  const { onSwipeLeft, onSwipeRight } = useSwipeTabNavigation();
+  const { onSwipeLeft, onSwipeRight, canSwipeLeft, canSwipeRight } = useSwipeTabNavigation();
   const { width: screenWidth } = useWindowDimensions();
   const translateX = useSharedValue(0);
   const isFocused = useIsFocused();
@@ -59,11 +60,29 @@ export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
   // snapping back to center while still on top. Resetting on this screen's
   // own focus instead guarantees it's always at rest by the time it's
   // actually visible again, regardless of how or when it was last left.
+  //
+  // FP-195-mobile-adj-2: a null lastSwipeDirection means this focus wasn't
+  // caused by a swipe (a plain tab-bar tap, or initial app load) — jump to
+  // 0 with no animation, unchanged from adj-1. A non-null direction means
+  // this screen is the swipe's destination: it starts off-screen on the
+  // opposite side from the direction the outgoing screen slid (a
+  // "left"-caused transition means the outgoing screen went left, so this
+  // one arrives from the right, at +screenWidth) and slides in to 0,
+  // in sync with the outgoing screen's own slide. Cleared immediately after
+  // reading so a later plain tap doesn't replay a stale slide-in.
   useEffect(() => {
-    if (isFocused) {
+    if (!isFocused) return;
+
+    const direction = getLastSwipeDirection();
+    if (direction === null) {
       translateX.value = 0;
+      return;
     }
-  }, [isFocused, translateX]);
+
+    setLastSwipeDirection(null);
+    translateX.value = direction === "left" ? screenWidth : -screenWidth;
+    translateX.value = withTiming(0, { duration: SLIDE_OUT_DURATION_MS });
+  }, [isFocused, translateX, screenWidth]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
@@ -89,6 +108,19 @@ export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
       // advances forward — same direction convention as iOS home-screen
       // paging/Stories, unchanged from FP-194.
       const isSwipeLeft = translationX < 0;
+
+      // FP-195-mobile-adj-2: a qualifying swipe at either boundary has no
+      // adjacent tab to land on — onSwipeLeft/onSwipeRight would silently
+      // no-op internally (see useSwipeTabNavigation.ts's own boundary
+      // check), so playing the off-screen animation here would leave this
+      // screen stuck fully off-screen with no focus change ever coming to
+      // trigger adj-1's reset. Treated exactly like a non-qualifying swipe
+      // instead — spring back, no animation, no navigation call.
+      if ((isSwipeLeft && !canSwipeLeft) || (!isSwipeLeft && !canSwipeRight)) {
+        translateX.value = withSpring(0);
+        return;
+      }
+
       const offscreenTarget = isSwipeLeft ? -screenWidth : screenWidth;
 
       translateX.value = withTiming(offscreenTarget, { duration: SLIDE_OUT_DURATION_MS }, (finished) => {
@@ -97,9 +129,15 @@ export function SwipeableTabScreen({ children }: SwipeableTabScreenProps) {
         // isFocused effect above is the single source of truth for
         // resetting position now (see its own comment for why the reset
         // needed to move off this completion callback).
+        //
+        // FP-195-mobile-adj-2: records which direction caused this
+        // transition before navigating, so the incoming screen's own
+        // isFocused effect (above) knows which edge to slide in from.
         if (isSwipeLeft) {
+          runOnJS(setLastSwipeDirection)("left");
           runOnJS(onSwipeLeft)();
         } else {
+          runOnJS(setLastSwipeDirection)("right");
           runOnJS(onSwipeRight)();
         }
       });
