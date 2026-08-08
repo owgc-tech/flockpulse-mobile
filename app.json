@@ -10,8 +10,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "LSApplicationQueriesSchemes": ["comgooglemaps"]
-      }
+        "LSApplicationQueriesSchemes": ["comgooglemaps"],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.jwpunzalan.flockpulsemobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,7 +27,8 @@
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
-      ]
+      ],
+      "package": "com.jwpunzalan.flockpulsemobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
