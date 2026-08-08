@@ -24,22 +24,47 @@ export interface MeetingResourceConflict {
   bookedByName: string;
 }
 
+// FP-187-mobile: DELETE /api/members/me's INVALID_STATE_TRANSITION carries
+// exactly one of these three (confirmed live against the route handler) —
+// mirrors the `conflict` field's own precedent for a different endpoint's
+// structured 409 payload, rather than making callers regex-parse `message`.
 export class ApiError extends Error {
   code: string;
   status: number;
   conflict: MeetingResourceConflict | null;
+  assignedMemberCount: number | null;
+  ownedGroupCount: number | null;
+  ownedEventCount: number | null;
 
-  constructor(code: string, message: string, status: number, conflict: MeetingResourceConflict | null = null) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    conflict: MeetingResourceConflict | null = null,
+    assignedMemberCount: number | null = null,
+    ownedGroupCount: number | null = null,
+    ownedEventCount: number | null = null
+  ) {
     super(message);
     this.code = code;
     this.status = status;
     this.conflict = conflict;
+    this.assignedMemberCount = assignedMemberCount;
+    this.ownedGroupCount = ownedGroupCount;
+    this.ownedEventCount = ownedEventCount;
   }
 }
 
 interface ApiEnvelope<T> {
   data?: T;
-  error?: { code: string; message: string; conflict?: MeetingResourceConflict | null };
+  error?: {
+    code: string;
+    message: string;
+    conflict?: MeetingResourceConflict | null;
+    assignedMemberCount?: number | null;
+    ownedGroupCount?: number | null;
+    ownedEventCount?: number | null;
+  };
 }
 
 // Mirrors flockpulse-web's own API shape exactly: Authorization: Bearer
@@ -66,8 +91,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const body = (await response.json()) as ApiEnvelope<T>;
 
   if (!response.ok || body.error) {
-    const { code = "UNKNOWN_ERROR", message = "Something went wrong.", conflict = null } = body.error ?? {};
-    throw new ApiError(code, message, response.status, conflict);
+    const {
+      code = "UNKNOWN_ERROR",
+      message = "Something went wrong.",
+      conflict = null,
+      assignedMemberCount = null,
+      ownedGroupCount = null,
+      ownedEventCount = null,
+    } = body.error ?? {};
+    throw new ApiError(code, message, response.status, conflict, assignedMemberCount, ownedGroupCount, ownedEventCount);
   }
 
   return body.data as T;
