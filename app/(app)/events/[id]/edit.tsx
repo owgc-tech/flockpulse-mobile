@@ -809,7 +809,6 @@ export default function EditEventScreen() {
         testID="edit-event-location-address"
       />
 
-
       <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>
       <View style={styles.optionsRow}>
         {(["none", "zoom", "other"] as const).map((mode) => (
