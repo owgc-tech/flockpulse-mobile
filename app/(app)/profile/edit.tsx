@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
+import { UnavailabilitySection } from "@/src/features/profile/components/UnavailabilitySection";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -264,6 +265,11 @@ export default function EditProfileScreen() {
       >
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save</Text>}
       </Pressable>
+
+      {/* DIP-FP-190-mobile: add/delete are independent immediate API calls,
+          not batched with the Save button above — this section owns its
+          own load/error state entirely. */}
+      <UnavailabilitySection />
 
       {/* DIP-FP-186-mobile: change-password is a new sibling screen, not a
           field folded into this form — mirrors how preferences.tsx is
