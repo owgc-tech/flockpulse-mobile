@@ -772,7 +772,7 @@ function AcknowledgementCountTable({
 
   return (
     <View style={styles.responseCountTable} testID="acknowledgement-count-table">
-      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Response Count</Text>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Summary</Text>
       <View style={styles.responseCountRow}>
         <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Acknowledged</Text>
         <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Not Responded</Text>
@@ -820,7 +820,7 @@ function ResponseCountTable({
 
   return (
     <View style={styles.responseCountTable} testID="response-count-table">
-      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Response Count</Text>
+      <Text style={[styles.sectionTitle, themed.sectionTitle]}>Summary</Text>
       <View style={styles.responseCountRow}>
         <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Accepted</Text>
         <Text style={[styles.responseCountHeader, themed.fieldLabel]}>Tentative</Text>
