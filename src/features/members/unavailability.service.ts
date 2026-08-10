@@ -31,6 +31,20 @@ export async function addUnavailabilityRange(startDate: string, endDate: string)
   });
 }
 
+// FP-190-mobile-adj-1: real atomic update (PATCH), not delete-then-recreate
+// — confirmed live against the route handler, same self-only scoping and
+// body/error shape as POST above.
+export async function updateUnavailabilityRange(
+  id: string,
+  startDate: string,
+  endDate: string
+): Promise<UnavailabilityRange> {
+  return apiFetch<UnavailabilityRange>(`/api/members/me/unavailability/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ startDate, endDate }),
+  });
+}
+
 export async function deleteUnavailabilityRange(id: string): Promise<void> {
   await apiFetch<{ id: string }>(`/api/members/me/unavailability/${id}`, { method: "DELETE" });
 }

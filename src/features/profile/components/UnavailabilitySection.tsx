@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Pencil, Plus, Trash2 } from "lucide-react-native";
 import {
   addUnavailabilityRange,
   deleteUnavailabilityRange,
   listMyUnavailability,
+  updateUnavailabilityRange,
   type UnavailabilityRange,
 } from "@/src/features/members/unavailability.service";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -33,14 +32,11 @@ function isInCurrentYear(range: UnavailabilityRange): boolean {
   return range.start_date <= `${year}-12-31` && range.end_date >= `${year}-01-01`;
 }
 
-// Fixed width of the delete affordance revealed behind a swiped-left row —
-// also the open/closed snap target, not just a visual width.
-const SWIPE_REVEAL_WIDTH = 72;
-
-// Same activation/fail offsets as SwipeableTabScreen.tsx, so a horizontal
-// swipe on a row doesn't fight this screen's own vertical ScrollView.
-const HORIZONTAL_ACTIVATION_OFFSET = 20;
-const VERTICAL_FAIL_OFFSET = 20;
+// DIP-FP-190-mobile-adj-1: generous gap deliberately requested to prevent
+// mis-taps between the two permanently-visible icon buttons, on top of
+// each one's own hitSlop below.
+const ROW_ACTIONS_GAP = 24;
+const ICON_HIT_SLOP = { top: 8, right: 8, bottom: 8, left: 8 };
 
 function getThemedStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -54,63 +50,39 @@ function getThemedStyles(colors: ThemeColors) {
     confirmButton: { backgroundColor: colors.accent },
     list: { borderColor: colors.border },
     rowBorder: { borderBottomColor: colors.border },
-    rowContent: { backgroundColor: colors.background },
     rangeText: { color: colors.text },
-    deleteAction: { backgroundColor: colors.danger },
   });
 }
 
 interface UnavailabilityRowProps {
   range: UnavailabilityRange;
   themed: ReturnType<typeof getThemedStyles>;
+  colors: ThemeColors;
+  onEdit: (range: UnavailabilityRange) => void;
   onDelete: (id: string) => void;
 }
 
-// DIP-FP-190-mobile: reveal-only, not a full swipe-to-dismiss — mirrors
-// SwipeableTabScreen.tsx's activeOffsetX/failOffsetY disambiguation (a Pan
-// gesture only activates past activeOffsetX horizontally, yielding to
-// vertical scrolling if it crosses failOffsetY first), but this gesture
-// only ever snaps between 0 (closed) and -SWIPE_REVEAL_WIDTH (open) rather
-// than driving navigation. The actual delete only fires on a separate tap
-// of the revealed affordance — the swipe itself never deletes anything.
-function UnavailabilityRow({ range, themed, onDelete }: UnavailabilityRowProps) {
-  const translateX = useSharedValue(0);
-  const startX = useSharedValue(0);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-HORIZONTAL_ACTIVATION_OFFSET, HORIZONTAL_ACTIVATION_OFFSET])
-    .failOffsetY([-VERTICAL_FAIL_OFFSET, VERTICAL_FAIL_OFFSET])
-    .onStart(() => {
-      startX.value = translateX.value;
-    })
-    .onUpdate((event) => {
-      translateX.value = Math.min(0, Math.max(-SWIPE_REVEAL_WIDTH, startX.value + event.translationX));
-    })
-    .onEnd(() => {
-      const shouldOpen = translateX.value < -SWIPE_REVEAL_WIDTH / 2;
-      translateX.value = withSpring(shouldOpen ? -SWIPE_REVEAL_WIDTH : 0);
-    });
-
+// DIP-FP-190-mobile-adj-1: swipe-to-reveal removed entirely — both actions
+// are now permanently visible, plain icon Pressables, no gesture-handler/
+// reanimated involvement in this row at all.
+function UnavailabilityRow({ range, themed, colors, onEdit, onDelete }: UnavailabilityRowProps) {
   return (
     <View style={[styles.rowWrapper, themed.rowBorder]}>
-      <Pressable
-        style={[styles.deleteAction, themed.deleteAction]}
-        onPress={() => onDelete(range.id)}
-        testID={`unavailability-delete-${range.id}`}
-      >
-        <Trash2 size={20} color="#fff" />
-      </Pressable>
-      <GestureDetector gesture={panGesture}>
-        <Animated.View style={[styles.rowContent, themed.rowContent, animatedStyle]}>
-          <Text style={[styles.rangeText, themed.rangeText]} testID={`unavailability-range-${range.id}`}>
-            {formatRangeLabel(range)}
-          </Text>
-        </Animated.View>
-      </GestureDetector>
+      <Text style={[styles.rangeText, themed.rangeText]} numberOfLines={1} testID={`unavailability-range-${range.id}`}>
+        {formatRangeLabel(range)}
+      </Text>
+      <View style={styles.rowActions}>
+        <Pressable onPress={() => onEdit(range)} hitSlop={ICON_HIT_SLOP} testID={`unavailability-edit-${range.id}`}>
+          <Pencil size={18} color={colors.accent} />
+        </Pressable>
+        <Pressable
+          onPress={() => onDelete(range.id)}
+          hitSlop={ICON_HIT_SLOP}
+          testID={`unavailability-delete-${range.id}`}
+        >
+          <Trash2 size={18} color={colors.danger} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -126,7 +98,11 @@ export function UnavailabilitySection() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [isAdding, setIsAdding] = useState(false);
+  // DIP-FP-190-mobile-adj-1: the same from/to form now serves both add and
+  // edit — editingId null means "add," non-null means "edit that range,"
+  // rather than two separate form implementations.
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [showIosPicker, setShowIosPicker] = useState<"start" | "end" | null>(null);
@@ -171,28 +147,48 @@ export function UnavailabilitySection() {
     }
   };
 
-  const handleConfirmAdd = async () => {
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setStartDate(null);
+    setEndDate(null);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (range: UnavailabilityRange) => {
+    setEditingId(range.id);
+    setStartDate(new Date(`${range.start_date}T00:00:00`));
+    setEndDate(new Date(`${range.end_date}T00:00:00`));
+    setIsFormOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setIsFormOpen(false);
+    setEditingId(null);
+    setStartDate(null);
+    setEndDate(null);
+    setError(null);
+  };
+
+  const handleConfirmForm = async () => {
     if (!startDate || !endDate) return;
     setError(null);
     setIsSubmitting(true);
     try {
-      const created = await addUnavailabilityRange(toDateOnlyString(startDate), toDateOnlyString(endDate));
-      setRanges((prev) => [...prev, created]);
-      setIsAdding(false);
-      setStartDate(null);
-      setEndDate(null);
+      if (editingId) {
+        const updated = await updateUnavailabilityRange(editingId, toDateOnlyString(startDate), toDateOnlyString(endDate));
+        setRanges((prev) => prev.map((range) => (range.id === editingId ? updated : range)));
+      } else {
+        const created = await addUnavailabilityRange(toDateOnlyString(startDate), toDateOnlyString(endDate));
+        setRanges((prev) => [...prev, created]);
+      }
+      handleCloseForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add unavailability range.");
+      setError(
+        err instanceof Error ? err.message : `Failed to ${editingId ? "update" : "add"} unavailability range.`
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleCancelAdd = () => {
-    setIsAdding(false);
-    setStartDate(null);
-    setEndDate(null);
-    setError(null);
   };
 
   const handleDelete = async (id: string) => {
@@ -211,14 +207,14 @@ export function UnavailabilitySection() {
         <Text style={[styles.label, themed.label]}>Not available on these Dates</Text>
         <Pressable
           style={[styles.addButton, themed.addButton]}
-          onPress={() => setIsAdding(true)}
+          onPress={handleOpenAdd}
           testID="unavailability-add-button"
         >
           <Plus size={18} color="#fff" />
         </Pressable>
       </View>
 
-      {isAdding ? (
+      {isFormOpen ? (
         <View style={styles.addForm}>
           <Text style={[styles.fieldLabel, themed.label]}>From</Text>
           <Pressable
@@ -230,11 +226,15 @@ export function UnavailabilitySection() {
               {startDate ? startDate.toLocaleDateString() : "Select date"}
             </Text>
           </Pressable>
+          {/* DIP-FP-190-mobile-adj-1: inline (calendar grid), not spinner —
+              matches Android's look. Confirmed against the installed
+              @react-native-community/datetimepicker@9.1.0 types: IOSDisplay
+              includes 'inline'. */}
           {Platform.OS === "ios" && showIosPicker === "start" ? (
             <DateTimePicker
               value={startDate ?? new Date()}
               mode="date"
-              display="spinner"
+              display="inline"
               themeVariant="light"
               onChange={(event, selectedDate) => {
                 setShowIosPicker(null);
@@ -257,7 +257,7 @@ export function UnavailabilitySection() {
             <DateTimePicker
               value={endDate ?? new Date()}
               mode="date"
-              display="spinner"
+              display="inline"
               themeVariant="light"
               onChange={(event, selectedDate) => {
                 setShowIosPicker(null);
@@ -267,7 +267,7 @@ export function UnavailabilitySection() {
           ) : null}
 
           <View style={styles.addFormActions}>
-            <Pressable onPress={handleCancelAdd} disabled={isSubmitting} testID="unavailability-cancel">
+            <Pressable onPress={handleCloseForm} disabled={isSubmitting} testID="unavailability-cancel">
               <Text style={[styles.cancelText, themed.label]}>Cancel</Text>
             </Pressable>
             <Pressable
@@ -276,11 +276,15 @@ export function UnavailabilitySection() {
                 themed.confirmButton,
                 (!startDate || !endDate || isSubmitting) && styles.buttonDisabled,
               ]}
-              onPress={handleConfirmAdd}
+              onPress={handleConfirmForm}
               disabled={!startDate || !endDate || isSubmitting}
               testID="unavailability-confirm"
             >
-              {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmButtonText}>Add</Text>}
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.confirmButtonText}>{editingId ? "Save" : "Add"}</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -297,7 +301,14 @@ export function UnavailabilitySection() {
       ) : visibleRanges.length > 0 ? (
         <View style={[styles.list, themed.list]}>
           {visibleRanges.map((range) => (
-            <UnavailabilityRow key={range.id} range={range} themed={themed} onDelete={handleDelete} />
+            <UnavailabilityRow
+              key={range.id}
+              range={range}
+              themed={themed}
+              colors={colors}
+              onEdit={handleOpenEdit}
+              onDelete={handleDelete}
+            />
           ))}
         </View>
       ) : (
@@ -389,24 +400,21 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   rowWrapper: {
-    position: "relative",
-    overflow: "hidden",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  deleteAction: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: SWIPE_REVEAL_WIDTH,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-  },
-  rowContent: {
+    justifyContent: "space-between",
     paddingHorizontal: 12,
     paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   rangeText: {
     fontSize: 15,
+    flex: 1,
+    marginRight: 12,
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: ROW_ACTIONS_GAP,
   },
 });
