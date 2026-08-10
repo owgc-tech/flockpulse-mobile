@@ -16,7 +16,6 @@ export interface EventReminderContext {
   end_datetime: string;
   location_name: string;
   location_address: string;
-  location_url: string | null;
   talk_id: string | null;
   formation: EventReminderFormation | null;
 }

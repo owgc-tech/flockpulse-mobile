@@ -46,7 +46,6 @@ export interface MyEvent {
   end_datetime: string;
   location_name: string;
   location_address: string;
-  location_url: string | null;
   online_meeting_resource_id: string | null;
   online_meeting_url: string | null;
   online_meeting_platform_label: string | null;
@@ -176,7 +175,6 @@ export interface CreateEventInput {
   endDatetime?: string;
   locationName?: string;
   locationAddress?: string;
-  locationUrl?: string;
   onlineMeetingResourceId?: string;
   onlineMeetingUrl?: string;
   onlineMeetingPlatformLabel?: string;
@@ -208,7 +206,6 @@ export interface CreatedEvent {
   end_datetime: string;
   location_name: string;
   location_address: string;
-  location_url: string | null;
   online_meeting_resource_id: string | null;
   online_meeting_url: string | null;
   online_meeting_platform_label: string | null;
@@ -249,7 +246,6 @@ export interface UpdateEventInput {
   endDatetime: string;
   locationName: string;
   locationAddress: string;
-  locationUrl: string | null;
   onlineMeetingResourceId: string | null;
   onlineMeetingUrl: string | null;
   onlineMeetingPlatformLabel: string | null;
@@ -278,7 +274,6 @@ export interface UpdatedEvent {
   end_datetime: string;
   location_name: string;
   location_address: string;
-  location_url: string | null;
   online_meeting_resource_id: string | null;
   online_meeting_url: string | null;
   online_meeting_platform_label: string | null;

@@ -349,7 +349,6 @@ export default function CreateEventScreen() {
   const [iosDraftDate, setIosDraftDate] = useState<Date>(new Date());
   const [locationName, setLocationName] = useState("");
   const [locationAddress, setLocationAddress] = useState("");
-  const [locationUrl, setLocationUrl] = useState("");
   // DIP-FP-132-FP-133-FP-134: blank = tenant default (omitted on submit),
   // string state so the numeric TextInput can hold an in-progress/invalid
   // value without fighting controlled-input semantics, same as `code` in
@@ -507,7 +506,6 @@ export default function CreateEventScreen() {
             endDatetime: endDatetime!.toISOString(),
             locationName: locationName.trim(),
             locationAddress: locationAddress.trim(),
-            ...(locationUrl.trim() ? { locationUrl: locationUrl.trim() } : {}),
             ...(meetingMode === "zoom" && onlineMeetingResourceId ? { onlineMeetingResourceId } : {}),
             ...(meetingMode === "other" && onlineMeetingUrl.trim()
               ? {
@@ -778,17 +776,6 @@ export default function CreateEventScreen() {
             editable={!isSubmitting}
             placeholderTextColor={colors.textMuted}
             testID="create-event-location-address"
-          />
-
-          <Text style={[styles.label, themed.label]}>Location URL (optional)</Text>
-          <TextInput
-            style={[styles.input, themed.input]}
-            value={locationUrl}
-            onChangeText={setLocationUrl}
-            editable={!isSubmitting}
-            autoCapitalize="none"
-            placeholderTextColor={colors.textMuted}
-            testID="create-event-location-url"
           />
 
           <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>

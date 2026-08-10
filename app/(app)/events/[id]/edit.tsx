@@ -375,7 +375,6 @@ export default function EditEventScreen() {
   const [iosDraftDate, setIosDraftDate] = useState<Date>(new Date());
   const [locationName, setLocationName] = useState(initialEvent.location_name ?? "");
   const [locationAddress, setLocationAddress] = useState(initialEvent.location_address ?? "");
-  const [locationUrl, setLocationUrl] = useState(initialEvent.location_url ?? "");
   // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): prefilled from
   // the event's actual override, not always blank — leaving this field
   // as-is and saving previously sent an explicit null (blank = tenant
@@ -577,7 +576,6 @@ export default function EditEventScreen() {
         endDatetime: endDatetime.toISOString(),
         locationName: locationName.trim(),
         locationAddress: locationAddress.trim(),
-        locationUrl: locationUrl.trim() ? locationUrl.trim() : null,
         onlineMeetingResourceId: meetingMode === "zoom" ? (onlineMeetingResourceId ?? null) : null,
         onlineMeetingUrl: meetingMode === "other" && onlineMeetingUrl.trim() ? onlineMeetingUrl.trim() : null,
         onlineMeetingPlatformLabel:
@@ -809,17 +807,6 @@ export default function EditEventScreen() {
         editable={!isSubmitting}
         placeholderTextColor={colors.textMuted}
         testID="edit-event-location-address"
-      />
-
-      <Text style={[styles.label, themed.label]}>Location URL (optional)</Text>
-      <TextInput
-        style={[styles.input, themed.input]}
-        value={locationUrl}
-        onChangeText={setLocationUrl}
-        editable={!isSubmitting}
-        autoCapitalize="none"
-        placeholderTextColor={colors.textMuted}
-        testID="edit-event-location-url"
       />
 
       <Text style={[styles.label, themed.label]}>Online Meeting (optional)</Text>
