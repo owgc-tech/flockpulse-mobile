@@ -14,10 +14,6 @@ import type { ThemeColors } from "@/src/theme/colors";
 // false regardless of what's actually installed. That's a native config
 // change, not shippable via eas update — needs an actual EAS Build.
 export async function getMapUrl(event: MyEvent): Promise<string> {
-  if (event.location_url) {
-    return event.location_url;
-  }
-
   const query = encodeURIComponent(event.location_address);
 
   try {
