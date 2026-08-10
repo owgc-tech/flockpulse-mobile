@@ -7,7 +7,12 @@ import {
   listEventsForType,
   listEventTypes,
 } from "@/src/features/dashboard/services/dashboard.service";
-import type { DashboardEventOption, DashboardEventType, DashboardStats } from "@/src/features/dashboard/types";
+import type {
+  DashboardEventOption,
+  DashboardEventType,
+  DashboardRsvpStats,
+  DashboardStats,
+} from "@/src/features/dashboard/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -195,7 +200,7 @@ type RsvpCycleView = (typeof RSVP_CYCLE)[number];
 // total is the sum of all four raw counts, same denominator concept as
 // rsvpMax below, just not previously applied to the headline. "—" when
 // total is 0, same guard pattern as attendancePercent's null case.
-function rsvpHeadline(view: RsvpCycleView, rsvp: DashboardStats["rsvp"]): string {
+function rsvpHeadline(view: RsvpCycleView, rsvp: DashboardRsvpStats): string {
   const total = rsvp.yes_count + rsvp.no_count + rsvp.tentative_count + rsvp.no_response_count;
   const pct = (value: number) => (total > 0 ? `${Math.round((value / total) * 100)}%` : "—");
 
@@ -225,31 +230,76 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
   const rsvpView = RSVP_CYCLE[rsvpCycleIndex];
   const handleRsvpTap = () => setRsvpCycleIndex((i) => (i + 1) % RSVP_CYCLE.length);
 
-  const attendancePercent = stats.attendance.percent;
+  // DIP-FP-197-mobile: Announcement events return only `announcement`
+  // (attendance/rsvp/rating omitted entirely — confirmed live against web's
+  // report.repository.ts) — a single card instead of the usual three. This
+  // early return happens after both hooks above are already called
+  // unconditionally, so it doesn't violate the Rules of Hooks even though
+  // DashboardStats' fields are all independently optional on the type.
+  if (stats.announcement) {
+    const announcement = stats.announcement;
+    const announcementColor =
+      announcement.percent !== null ? rateBandColor(colors, announcement.percent / 100) : colors.textMuted;
+    const announcementMax = Math.max(announcement.acknowledged_count, announcement.not_acknowledged_count);
+
+    return (
+      <View style={styles.cards}>
+        <View style={[styles.card, { borderColor: announcementColor + "44" }]}>
+          <View style={[styles.cardHeaderBar, { backgroundColor: announcementColor }]}>
+            <Text style={styles.cardHeaderText}>Acknowledgement</Text>
+          </View>
+          <View style={[styles.cardBody, { backgroundColor: announcementColor + "1a" }]}>
+            <Text style={[styles.cardStat, { color: announcementColor }]}>
+              {announcement.percent !== null ? `${announcement.percent}%` : "—"}
+            </Text>
+            <View style={styles.barList}>
+              <BarRow
+                label="Acknowledged"
+                count={announcement.acknowledged_count}
+                max={announcementMax}
+                color={colors.success}
+              />
+              <BarRow
+                label="Not Acknowledged"
+                count={announcement.not_acknowledged_count}
+                max={announcementMax}
+                color={colors.danger}
+              />
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Not an Announcement event, so attendance/rsvp/rating are guaranteed
+  // present together (confirmed live — web only ever omits them as a group,
+  // in exchange for `announcement`, never partially). Non-null-asserted
+  // once here rather than at every call site below, same convention already
+  // used elsewhere in this codebase (e.g. create.tsx's startDatetime!).
+  const attendance = stats.attendance!;
+  const rsvp = stats.rsvp!;
+  const rating = stats.rating!;
+
+  const attendancePercent = attendance.percent;
   const attendanceColor =
     attendancePercent !== null ? rateBandColor(colors, attendancePercent / 100) : colors.textMuted;
 
-  const rsvpTotal =
-    stats.rsvp.yes_count + stats.rsvp.no_count + stats.rsvp.tentative_count + stats.rsvp.no_response_count;
-  const rsvpRate = rsvpTotal > 0 ? stats.rsvp.yes_count / rsvpTotal : 0;
+  const rsvpTotal = rsvp.yes_count + rsvp.no_count + rsvp.tentative_count + rsvp.no_response_count;
+  const rsvpRate = rsvpTotal > 0 ? rsvp.yes_count / rsvpTotal : 0;
   const rsvpColor = rsvpTotal > 0 ? rateBandColor(colors, rsvpRate) : colors.textMuted;
 
-  const ratingColor = ratingBandColor(colors, stats.rating.rounded);
+  const ratingColor = ratingBandColor(colors, rating.rounded);
 
   const attendanceMax = Math.max(
-    stats.attendance.attended_count,
-    stats.attendance.did_not_attend_count,
-    stats.attendance.did_not_self_report_count
+    attendance.attended_count,
+    attendance.did_not_attend_count,
+    attendance.did_not_self_report_count
   );
 
-  const rsvpMax = Math.max(
-    stats.rsvp.yes_count,
-    stats.rsvp.no_count,
-    stats.rsvp.tentative_count,
-    stats.rsvp.no_response_count
-  );
+  const rsvpMax = Math.max(rsvp.yes_count, rsvp.no_count, rsvp.tentative_count, rsvp.no_response_count);
 
-  const breakdownByStar = new Map(stats.rating.breakdown.map((entry) => [entry.star, entry.count]));
+  const breakdownByStar = new Map(rating.breakdown.map((entry) => [entry.star, entry.count]));
   const ratingMax = Math.max(0, ...STAR_ORDER.map((star) => breakdownByStar.get(star) ?? 0));
 
   return (
@@ -262,23 +312,18 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
           <Text style={[styles.cardStat, { color: attendanceColor }]}>
             {attendancePercent !== null ? `${attendancePercent}%` : "—"}
           </Text>
-          <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {stats.attendance.expected_count}</Text>
+          <Text style={[styles.cardMeta, themed.cardMeta]}>Expected: {attendance.expected_count}</Text>
           <View style={styles.barList}>
-            <BarRow
-              label="Attended"
-              count={stats.attendance.attended_count}
-              max={attendanceMax}
-              color={colors.success}
-            />
+            <BarRow label="Attended" count={attendance.attended_count} max={attendanceMax} color={colors.success} />
             <BarRow
               label="Did Not Attend"
-              count={stats.attendance.did_not_attend_count}
+              count={attendance.did_not_attend_count}
               max={attendanceMax}
               color={colors.danger}
             />
             <BarRow
               label="Did Not Self-Report"
-              count={stats.attendance.did_not_self_report_count}
+              count={attendance.did_not_self_report_count}
               max={attendanceMax}
               color={colors.warning}
             />
@@ -296,18 +341,13 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
               label changes), and resets to Accepted on remount (see
               rsvpCycleIndex's own comment above). */}
           <Pressable onPress={handleRsvpTap} testID="dashboard-rsvp-cycle">
-            <Text style={[styles.cardStat, { color: rsvpColor }]}>{rsvpHeadline(rsvpView, stats.rsvp)}</Text>
+            <Text style={[styles.cardStat, { color: rsvpColor }]}>{rsvpHeadline(rsvpView, rsvp)}</Text>
           </Pressable>
           <View style={styles.barList}>
-            <BarRow label="Accepted" count={stats.rsvp.yes_count} max={rsvpMax} color={colors.success} />
-            <BarRow label="Declined" count={stats.rsvp.no_count} max={rsvpMax} color={colors.danger} />
-            <BarRow label="Tentative" count={stats.rsvp.tentative_count} max={rsvpMax} color={colors.warning} />
-            <BarRow
-              label="Did Not Respond"
-              count={stats.rsvp.no_response_count}
-              max={rsvpMax}
-              color={colors.textMuted}
-            />
+            <BarRow label="Accepted" count={rsvp.yes_count} max={rsvpMax} color={colors.success} />
+            <BarRow label="Declined" count={rsvp.no_count} max={rsvpMax} color={colors.danger} />
+            <BarRow label="Tentative" count={rsvp.tentative_count} max={rsvpMax} color={colors.warning} />
+            <BarRow label="Did Not Respond" count={rsvp.no_response_count} max={rsvpMax} color={colors.textMuted} />
           </View>
         </View>
       </View>
@@ -318,10 +358,10 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
         </View>
         <View style={[styles.cardBody, { backgroundColor: ratingColor + "1a" }]}>
           <Text style={[styles.cardStat, { color: ratingColor }]}>
-            {stats.rating.average !== null ? stats.rating.average.toFixed(1) : "—"}
+            {rating.average !== null ? rating.average.toFixed(1) : "—"}
           </Text>
           <Text style={[styles.cardMeta, themed.cardMeta]}>
-            {stats.rating.rating_count} rating{stats.rating.rating_count === 1 ? "" : "s"}
+            {rating.rating_count} rating{rating.rating_count === 1 ? "" : "s"}
           </Text>
           <View style={styles.barList}>
             {STAR_ORDER.map((star) => (
@@ -334,9 +374,9 @@ function StatsCards({ stats, themed }: { stats: DashboardStats; themed: ReturnTy
               />
             ))}
           </View>
-          {stats.rating.feedback.length > 0 ? (
+          {rating.feedback.length > 0 ? (
             <View style={styles.feedbackList}>
-              {stats.rating.feedback.map((entry, index) => (
+              {rating.feedback.map((entry, index) => (
                 <View key={index} style={styles.feedbackRow}>
                   {entry.star_rating !== null ? (
                     // DIP-FP-182-mobile-adj-4: same starBarColor() call as

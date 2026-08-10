@@ -74,8 +74,23 @@ export interface DashboardRatingStats {
   feedback: DashboardFeedbackEntry[];
 }
 
+// DIP-FP-197-mobile: Announcement-type events have no attendance/rsvp/
+// rating data (FP-191's design routes them through
+// announcement_acknowledgements instead) — confirmed live against web's
+// report.repository.ts, which returns only `announcement` for these events,
+// omitting the other three entirely rather than returning them empty.
+export interface DashboardAnnouncementStats {
+  acknowledged_count: number;
+  not_acknowledged_count: number;
+  total_count: number;
+  // Same null-when-nothing-to-divide-by convention as
+  // DashboardAttendanceStats.percent above.
+  percent: number | null;
+}
+
 export interface DashboardStats {
-  attendance: DashboardAttendanceStats;
-  rsvp: DashboardRsvpStats;
-  rating: DashboardRatingStats;
+  attendance?: DashboardAttendanceStats;
+  rsvp?: DashboardRsvpStats;
+  rating?: DashboardRatingStats;
+  announcement?: DashboardAnnouncementStats;
 }
