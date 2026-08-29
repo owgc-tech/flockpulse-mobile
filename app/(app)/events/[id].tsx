@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { apiFetch } from "@/src/lib/api";
 import { useSession } from "@/src/features/auth/hooks/useSession";
@@ -390,6 +401,7 @@ export default function EventDetailScreen() {
     : event.online_meeting_platform_label || "Join Meeting";
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView
       contentContainerStyle={[styles.container, themed.container]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
@@ -524,6 +536,7 @@ export default function EventDetailScreen() {
         </>
       ) : null}
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -846,6 +859,9 @@ function ResponseCountTable({
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",

@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { listMyEvents } from "@/src/features/events/services/events.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
@@ -143,6 +153,7 @@ export default function PreferencesScreen() {
   }
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
         <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
@@ -240,10 +251,14 @@ export default function PreferencesScreen() {
         ))}
       </View>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",

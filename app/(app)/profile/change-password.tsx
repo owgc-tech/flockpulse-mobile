@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
 import { router } from "expo-router";
 import { supabase } from "@/src/lib/supabase";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -74,6 +83,7 @@ export default function ChangePasswordScreen() {
   };
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
         <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
@@ -126,10 +136,14 @@ export default function ChangePasswordScreen() {
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Update Password</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",

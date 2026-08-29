@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { MfaVerifyForm } from "@/src/features/auth/components/MfaVerifyForm";
 import { getTotpFactorId, verifyTotpChallenge } from "@/src/features/auth/services/auth.service";
@@ -52,10 +52,13 @@ export default function MfaVerifyScreen() {
   };
 
   return (
-    <View style={[styles.container, themed.container]}>
+    <KeyboardAvoidingView
+      style={[styles.container, themed.container]}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <Text style={[styles.title, themed.title]}>Verify It&apos;s You</Text>
       <MfaVerifyForm onSubmit={handleVerify} />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

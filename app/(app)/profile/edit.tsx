@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
@@ -136,6 +146,7 @@ export default function EditProfileScreen() {
   }
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
         <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
@@ -293,10 +304,14 @@ export default function EditProfileScreen() {
         <Text style={[styles.deleteAccountLinkText, themed.error]}>Delete My Account</Text>
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",
