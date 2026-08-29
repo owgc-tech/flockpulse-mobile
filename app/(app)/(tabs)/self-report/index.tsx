@@ -357,6 +357,12 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    // Extra keyboard-clearance room: the feedback/reason TextInput sits near
+    // the bottom of its own card, with only an error line and the Submit
+    // button below it inside that same card — when it's the last (or only)
+    // pending item, the FlatList has no further content to scroll into
+    // (FP-203-mobile-adj-1).
+    paddingBottom: 300,
     flexGrow: 1,
   },
   center: {

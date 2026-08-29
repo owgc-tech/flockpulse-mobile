@@ -159,6 +159,11 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 24,
+    // Extra keyboard-clearance room: this is a short form — only the Submit
+    // button (no marginBottom) follows the single password field, not
+    // enough runway on its own for the ScrollView to bring that field above
+    // the keyboard (FP-203-mobile-adj-1).
+    paddingBottom: 300,
     backgroundColor: "#fff",
     flexGrow: 1,
   },
