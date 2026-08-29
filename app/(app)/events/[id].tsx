@@ -864,6 +864,12 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 24,
+    // Extra keyboard-clearance room: RsvpControls'/AnnouncementSection's
+    // inputs sit mid-screen, above a Roster/Recipients section whose height
+    // varies with the event's actual response count — when that section is
+    // short (few RSVPs), the ScrollView otherwise has no runway left to
+    // scroll the focused field above the keyboard (FP-203-mobile-adj-1).
+    paddingBottom: 300,
     backgroundColor: "#fff",
     flexGrow: 1,
   },
