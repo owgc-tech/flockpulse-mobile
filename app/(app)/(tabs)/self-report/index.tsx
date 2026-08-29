@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import { submitSelfReport, listPendingSelfReports } from "@/src/features/self-reports/services/selfReports.service";
@@ -111,6 +122,7 @@ export default function SelfReportTabScreen() {
 
   return (
     <SwipeableTabScreen>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <View style={[styles.container, themed.container]}>
       {isLoading ? (
         <View style={styles.center}>
@@ -125,6 +137,7 @@ export default function SelfReportTabScreen() {
           contentContainerStyle={styles.listContent}
           data={items}
           keyExtractor={(item) => item.event_id}
+          keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => load(true)} />}
           ListEmptyComponent={
             <View style={styles.center}>
@@ -141,6 +154,7 @@ export default function SelfReportTabScreen() {
         />
       )}
     </View>
+    </KeyboardAvoidingView>
     </SwipeableTabScreen>
   );
 }
@@ -334,6 +348,9 @@ function AnnouncementCheckInItem({
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     backgroundColor: "#fff",

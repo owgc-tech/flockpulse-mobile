@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+} from "react-native";
 import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signInWithPassword, signOut } from "@/src/features/auth/services/auth.service";
@@ -102,6 +111,7 @@ export default function DeleteAccountScreen() {
   };
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Pressable onPress={() => router.back()} style={styles.backLink} testID="back-link">
         <Text style={[styles.backLinkText, themed.backLinkText]}>‹ Back</Text>
@@ -139,10 +149,14 @@ export default function DeleteAccountScreen() {
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Delete My Account</Text>}
       </Pressable>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     padding: 24,
     backgroundColor: "#fff",

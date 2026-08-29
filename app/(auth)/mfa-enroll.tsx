@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import { MfaEnrollForm } from "@/src/features/auth/components/MfaEnrollForm";
 import {
@@ -96,14 +96,19 @@ export default function MfaEnrollScreen() {
   }
 
   return (
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Text style={[styles.title, themed.title]}>Set Up Two-Factor Authentication</Text>
       <MfaEnrollForm enrollment={enrollment} onVerify={handleVerify} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     justifyContent: "center",
