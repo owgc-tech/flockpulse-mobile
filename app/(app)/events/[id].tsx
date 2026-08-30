@@ -632,6 +632,12 @@ function AnnouncementSection({
       await acknowledgeAnnouncement(event.id);
       notifyAnnouncementAcknowledged(event.id);
       setJustAcknowledged(true);
+      // FP-204: hand the Events tab a fresh list so it reflects the new
+      // Acknowledged state on next focus — same DIP-FP-151 mechanism
+      // RsvpSection's handleSubmit above already uses for RSVP.
+      listMyEvents()
+        .then(notifyEventsRefreshed)
+        .catch((err) => console.warn("Failed to refresh events list after acknowledge:", err));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to acknowledge this announcement.");
     } finally {
