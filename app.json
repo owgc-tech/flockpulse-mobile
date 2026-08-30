@@ -44,7 +44,16 @@
           "faceIDPermission": "Allow $(PRODUCT_NAME) to use Face ID to unlock the app on this trusted device."
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#E6F4FE"
+        }
+      ]
     ],
     "extra": {
       "router": {},
