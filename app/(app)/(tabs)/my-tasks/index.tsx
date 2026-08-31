@@ -21,6 +21,7 @@ function getThemedStyles(colors: ThemeColors) {
     eventName: { color: colors.text },
     meta: { color: colors.textSecondary },
     error: { color: colors.danger },
+    retryButton: { backgroundColor: colors.accent },
   });
 }
 
@@ -103,6 +104,9 @@ export default function MyTasksScreen() {
       ) : error ? (
         <View style={styles.center}>
           <Text style={[styles.error, themed.error]}>{error}</Text>
+          <Pressable style={[styles.retryButton, themed.retryButton]} onPress={() => load()} testID="my-tasks-retry">
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
@@ -180,5 +184,17 @@ const styles = StyleSheet.create({
     color: "#c0392b",
     fontSize: 13,
     marginTop: 8,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
   },
 });
