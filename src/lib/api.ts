@@ -141,7 +141,13 @@ async function request<T>(path: string, init: RequestInit | undefined, isRetry: 
       signal: controller.signal,
     });
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
+    // FP-206-adj-1: Expo's real fetch implementation throws a FetchError
+    // (node_modules/expo/src/winter/fetch/FetchErrors.ts) that never sets
+    // .name — confirmed by reading its source — so it inherits the generic
+    // "Error" rather than "AbortError" and the previous err.name check never
+    // matched. Checking controller.signal.aborted directly asks "did my own
+    // timeout fire" instead of relying on a platform's fetch error shape.
+    if (controller.signal.aborted) {
       throw timeoutError();
     }
     throw err;
