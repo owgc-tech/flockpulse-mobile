@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import {
@@ -98,6 +98,7 @@ function getThemedStyles(colors: ThemeColors) {
     placeholderText: { color: colors.textMuted },
     empty: { color: colors.textSecondary },
     error: { color: colors.danger },
+    retryButton: { backgroundColor: colors.accent },
     sectionHeading: { color: colors.text },
     cardMeta: { color: colors.textSecondary },
     modalContainer: { backgroundColor: colors.background },
@@ -418,48 +419,57 @@ export default function DashboardScreen() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
+  // FP-206-adj-2: extracted out of the mount-only useEffect below so Retry
+  // can re-invoke this same bootstrap when the very first load (before any
+  // event type/event was ever selected) is what failed — see handleRetry's
+  // dispatch logic. isMountedRef preserves the original inline version's
+  // unmount-guard (a component-unmounted-mid-fetch race can't set state on
+  // an unmounted screen), just moved from a useEffect-local `isCancelled`
+  // closure to a ref so this can be called from outside that effect too.
+  const isMountedRef = useRef(true);
   useEffect(() => {
-    let isCancelled = false;
-
-    async function load() {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [defaultDashboard, types] = await Promise.all([getDefaultDashboard(), listEventTypes()]);
-        if (isCancelled) return;
-
-        setEventTypes(types);
-
-        if (defaultDashboard === null) {
-          setHasAnyEvents(false);
-          return;
-        }
-
-        setHasAnyEvents(true);
-        setSelectedEventType(defaultDashboard.event_type);
-        setSelectedEvent(defaultDashboard.event);
-
-        // getDefaultDashboard() doesn't bundle stats (see DefaultDashboardEvent
-        // in types.ts) — fetched alongside the Event dropdown's own options.
-        const [typeEvents, initialStats] = await Promise.all([
-          listEventsForType(defaultDashboard.event_type.id),
-          getDashboardStats(defaultDashboard.event.id),
-        ]);
-        if (isCancelled) return;
-        setEvents(typeEvents);
-        setStats(initialStats);
-      } catch (err) {
-        if (!isCancelled) setError(err instanceof Error ? err.message : "Failed to load the dashboard.");
-      } finally {
-        if (!isCancelled) setIsLoading(false);
-      }
-    }
-
-    load();
     return () => {
-      isCancelled = true;
+      isMountedRef.current = false;
     };
   }, []);
+
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [defaultDashboard, types] = await Promise.all([getDefaultDashboard(), listEventTypes()]);
+      if (!isMountedRef.current) return;
+
+      setEventTypes(types);
+
+      if (defaultDashboard === null) {
+        setHasAnyEvents(false);
+        return;
+      }
+
+      setHasAnyEvents(true);
+      setSelectedEventType(defaultDashboard.event_type);
+      setSelectedEvent(defaultDashboard.event);
+
+      // getDefaultDashboard() doesn't bundle stats (see DefaultDashboardEvent
+      // in types.ts) — fetched alongside the Event dropdown's own options.
+      const [typeEvents, initialStats] = await Promise.all([
+        listEventsForType(defaultDashboard.event_type.id),
+        getDashboardStats(defaultDashboard.event.id),
+      ]);
+      if (!isMountedRef.current) return;
+      setEvents(typeEvents);
+      setStats(initialStats);
+    } catch (err) {
+      if (isMountedRef.current) setError(err instanceof Error ? err.message : "Failed to load the dashboard.");
+    } finally {
+      if (isMountedRef.current) setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   const handleSelectEventType = async (eventType: DashboardEventType) => {
     setSelectedEventType(eventType);
@@ -499,6 +509,32 @@ export default function DashboardScreen() {
     }
   };
 
+  // FP-206-adj-2: unlike the other three tab screens, this one has three
+  // distinct places `error` can come from (the initial bootstrap, an event
+  // type change, an event change), and selection state alone can't tell them
+  // apart — loadDashboard sets selectedEventType/selectedEvent *before*
+  // fetching that type's event list and stats, so a failure partway through
+  // it still leaves both "selected" even though `events` was never
+  // populated. Checking what actually loaded (eventTypes/events, not just
+  // what's selected) picks the retry that will actually repair the gap:
+  // - eventTypes never loaded at all -> the initial bootstrap itself failed.
+  // - a type is selected but its event list never loaded -> re-run the
+  //   type-change fetch (also covers loadDashboard's own second phase
+  //   failing after it already set selectedEventType/selectedEvent).
+  // - the event list loaded fine and an event is selected -> only that
+  //   event's stats need retrying.
+  const handleRetry = () => {
+    if (eventTypes.length === 0) {
+      loadDashboard();
+    } else if (selectedEventType && events.length === 0) {
+      handleSelectEventType(selectedEventType);
+    } else if (selectedEvent) {
+      handleSelectEvent(selectedEvent);
+    } else {
+      loadDashboard();
+    }
+  };
+
   // DIP-FP-194-mobile: this screen has three separate top-level return
   // points (unlike the other four tab screens, which each have one return
   // with internal ternary branches) — all three get wrapped, not just the
@@ -527,7 +563,14 @@ export default function DashboardScreen() {
   return (
     <SwipeableTabScreen>
     <ScrollView style={[styles.container, themed.container]} contentContainerStyle={styles.content}>
-      {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorRow}>
+          <Text style={[styles.error, themed.error]}>{error}</Text>
+          <Pressable style={[styles.retryButton, themed.retryButton]} onPress={handleRetry} testID="dashboard-retry">
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* DIP-FP-182-mobile-adj-3: one shared heading replaces the "Event
           Type" field label entirely; the "Event" field's own label is
@@ -602,8 +645,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
-  error: {
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     marginBottom: 12,
+  },
+  error: {
+    flex: 1,
+  },
+  retryButton: {
+    flexShrink: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
   },
   modalContainer: {
     flex: 1,
