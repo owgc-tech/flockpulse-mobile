@@ -22,6 +22,7 @@ import {
   listMyEvents,
   publishEvent,
 } from "@/src/features/events/services/events.service";
+import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import { createEventTaskAssignment, listTasks } from "@/src/features/tasks/services/tasks.service";
 import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
@@ -573,6 +574,7 @@ export default function CreateEventScreen() {
       // single-event array would wrongly cancel every other event's
       // reminders.
       const freshEvents = await listMyEvents();
+      notifyEventsRefreshed(freshEvents);
       reconcileEventReminders(freshEvents).catch((err) => console.warn("Failed to reconcile event reminders:", err));
       reconcileSelfReportReminders(freshEvents).catch((err) =>
         console.warn("Failed to reconcile self-report reminders:", err)
