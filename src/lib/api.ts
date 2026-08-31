@@ -67,26 +67,68 @@ interface ApiEnvelope<T> {
   };
 }
 
+// FP-206: prevents a hung request (dead/degraded connection) from leaving a
+// screen in an infinite loading state with no recourse.
+const REQUEST_TIMEOUT_MS = 15000;
+
+function timeoutError(): ApiError {
+  return new ApiError(
+    "TIMEOUT",
+    "This is taking longer than expected. Check your connection and try again.",
+    0
+  );
+}
+
+// FP-206: getSession() takes no arguments — confirmed live against
+// @supabase/auth-js's GoTrueClient (no AbortSignal param exists) — so unlike
+// the fetch() call below, it can't be bounded via AbortController. It also
+// isn't reliably bounded internally: when the stored session has expired,
+// __loadSession triggers a token-refresh network call with no timeout of its
+// own (confirmed: no AbortController/timeout logic anywhere in auth-js's
+// GoTrueClient network path). Promise.race against a rejecting timer is the
+// only way to bound it from the outside.
+function withTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(timeoutError()), REQUEST_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 // Mirrors flockpulse-web's own API shape exactly: Authorization: Bearer
 // <access_token> (no cookies anywhere in this API surface), and every
 // response is either { data } or { error: { code, message } }.
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await withTimeout(supabase.auth.getSession());
 
   if (!session) {
     throw new ApiError("AUTH_REQUIRED", "No active session.", 401);
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      ...init?.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        ...init?.headers,
+      },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw timeoutError();
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const body = (await response.json()) as ApiEnvelope<T>;
 
