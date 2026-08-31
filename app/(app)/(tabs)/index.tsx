@@ -122,6 +122,7 @@ function getThemedStyles(colors: ThemeColors) {
     error: { color: colors.danger },
     empty: { color: colors.textSecondary },
     fab: { backgroundColor: colors.accent },
+    retryButton: { backgroundColor: colors.accent },
   });
 }
 
@@ -438,6 +439,9 @@ export default function MyEventsScreen() {
       ) : error ? (
         <View style={styles.center}>
           <Text style={[styles.error, themed.error]}>{error}</Text>
+          <Pressable style={[styles.retryButton, themed.retryButton]} onPress={() => loadEvents(false)} testID="events-retry">
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </Pressable>
         </View>
       ) : (
         <SectionList
@@ -616,6 +620,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
     paddingHorizontal: 24,
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
   },
   empty: {
     fontSize: 15,
