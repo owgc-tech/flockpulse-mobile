@@ -229,7 +229,7 @@ export default function EditProfileScreen() {
         <DateTimePicker
           value={birthdate ?? new Date()}
           mode="date"
-          display="spinner"
+          display="inline"
           themeVariant="light"
           maximumDate={new Date()}
           onChange={(event, selectedDate) => {
