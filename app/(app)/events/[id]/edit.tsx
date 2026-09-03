@@ -66,6 +66,10 @@ function getThemedStyles(colors: ThemeColors) {
     optionText: { color: colors.text },
     submitButton: { backgroundColor: colors.accent },
     error: { color: colors.danger },
+    // DIP-FP-214-mobile: merged on top of a required field's normal style
+    // (or its options-row wrapper) when it was left blank on a failed Save.
+    invalidField: { borderColor: colors.danger, borderWidth: 1.5 },
+    invalidOptionsRow: { borderColor: colors.danger, borderWidth: 1.5, borderRadius: 8, padding: 8 },
     modalContainer: { backgroundColor: colors.background },
     modalTitle: { color: colors.text },
     doneText: { color: colors.accent },
@@ -432,6 +436,10 @@ export default function EditEventScreen() {
   const [addedTaskIds, setAddedTaskIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
+  // DIP-FP-214-mobile: which required fields were blank on the last failed
+  // Save. Keyed by the same names used in the handleSubmit checks below;
+  // each entry is cleared the moment its field becomes non-empty.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -535,6 +543,9 @@ export default function EditEventScreen() {
               const combined = new Date(selectedDate);
               combined.setHours(selectedTime.getHours(), selectedTime.getMinutes());
               (which === "start" ? setStartDatetime : setEndDatetime)(combined);
+              // DIP-FP-214-mobile: picking any value clears that field's
+              // blank-highlight (a Date is always truthy once set).
+              setFieldErrors((prev) => ({ ...prev, [which === "start" ? "startDatetime" : "endDatetime"]: false }));
             },
           });
         },
@@ -548,6 +559,14 @@ export default function EditEventScreen() {
   const handleSubmit = async () => {
     setError(null);
 
+    // DIP-FP-214-mobile: same required-field checks (and same summary
+    // message) as before — the only addition is setFieldErrors, which
+    // records each individual blank field so its input can be red-bordered
+    // below. The if-condition is left byte-for-byte identical so the
+    // downstream type-narrowing it provides is unchanged. (This screen has
+    // no isAnnouncement validation branch — see the note by the
+    // isAnnouncement derivation above — so it's the single non-announcement
+    // field set only.)
     if (
       !name.trim() ||
       !eventTypeId ||
@@ -556,14 +575,24 @@ export default function EditEventScreen() {
       !locationName.trim() ||
       !locationAddress.trim()
     ) {
+      setFieldErrors({
+        name: !name.trim(),
+        eventTypeId: !eventTypeId,
+        startDatetime: !startDatetime,
+        endDatetime: !endDatetime,
+        locationName: !locationName.trim(),
+        locationAddress: !locationAddress.trim(),
+      });
       setError("Please fill in all required fields.");
       return;
     }
     if (target.group_ids.length === 0 && target.member_ids.length === 0) {
+      setFieldErrors({ target: true });
       setError("Please select at least one target group or member.");
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
     try {
       // Every field is sent explicitly (null for "cleared"), never omitted —
@@ -661,16 +690,19 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Name</Text>
       <TextInput
-        style={[styles.input, themed.input]}
+        style={[styles.input, themed.input, fieldErrors.name && themed.invalidField]}
         value={name}
-        onChangeText={setName}
+        onChangeText={(text) => {
+          setName(text);
+          if (text.trim()) setFieldErrors((prev) => ({ ...prev, name: false }));
+        }}
         editable={!isSubmitting}
         placeholderTextColor={colors.textMuted}
         testID="edit-event-name"
       />
 
       <Text style={[styles.label, themed.label]}>Event Type</Text>
-      <View style={styles.optionsRow}>
+      <View style={[styles.optionsRow, fieldErrors.eventTypeId && themed.invalidOptionsRow]}>
         {eventTypes.map((type) => (
           <Pressable
             key={type.id}
@@ -679,7 +711,10 @@ export default function EditEventScreen() {
               themed.optionButton,
               eventTypeId === type.id && [styles.optionButtonSelected, themed.optionButtonSelected],
             ]}
-            onPress={() => setEventTypeId(type.id)}
+            onPress={() => {
+              setEventTypeId(type.id);
+              setFieldErrors((prev) => ({ ...prev, eventTypeId: false }));
+            }}
             disabled={isSubmitting}
             testID={`edit-event-type-${type.id}`}
           >
@@ -692,7 +727,7 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Start</Text>
       <Pressable
-        style={[styles.input, themed.input]}
+        style={[styles.input, themed.input, fieldErrors.startDatetime && themed.invalidField]}
         onPress={() => openDateTimePicker("start")}
         disabled={isSubmitting}
         testID="edit-event-start"
@@ -702,7 +737,7 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>End</Text>
       <Pressable
-        style={[styles.input, themed.input]}
+        style={[styles.input, themed.input, fieldErrors.endDatetime && themed.invalidField]}
         onPress={() => openDateTimePicker("end")}
         disabled={isSubmitting}
         testID="edit-event-end"
@@ -739,6 +774,12 @@ export default function EditEventScreen() {
                 setShowIosPicker(null);
                 if (which) {
                   (which === "start" ? setStartDatetime : setEndDatetime)(iosDraftDate);
+                  // DIP-FP-214-mobile: committing a value clears that
+                  // field's blank-highlight.
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    [which === "start" ? "startDatetime" : "endDatetime"]: false,
+                  }));
                 }
               }}
               testID="ios-picker-done"
@@ -793,9 +834,12 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Location Name</Text>
       <TextInput
-        style={[styles.input, themed.input]}
+        style={[styles.input, themed.input, fieldErrors.locationName && themed.invalidField]}
         value={locationName}
-        onChangeText={setLocationName}
+        onChangeText={(text) => {
+          setLocationName(text);
+          if (text.trim()) setFieldErrors((prev) => ({ ...prev, locationName: false }));
+        }}
         editable={!isSubmitting}
         placeholderTextColor={colors.textMuted}
         testID="edit-event-location-name"
@@ -803,9 +847,12 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Location Address</Text>
       <TextInput
-        style={[styles.input, themed.input]}
+        style={[styles.input, themed.input, fieldErrors.locationAddress && themed.invalidField]}
         value={locationAddress}
-        onChangeText={setLocationAddress}
+        onChangeText={(text) => {
+          setLocationAddress(text);
+          if (text.trim()) setFieldErrors((prev) => ({ ...prev, locationAddress: false }));
+        }}
         editable={!isSubmitting}
         placeholderTextColor={colors.textMuted}
         testID="edit-event-location-address"
@@ -870,7 +917,17 @@ export default function EditEventScreen() {
         </>
       ) : null}
 
-      <GroupMemberChipPicker label="Target Audience" value={target} onChange={setTarget} />
+      <GroupMemberChipPicker
+        label="Target Audience"
+        value={target}
+        invalid={fieldErrors.target}
+        onChange={(next) => {
+          setTarget(next);
+          if (next.group_ids.length > 0 || next.member_ids.length > 0) {
+            setFieldErrors((prev) => ({ ...prev, target: false }));
+          }
+        }}
+      />
 
       <FormationTalkPicker
         talkLabel={talkLabel}
