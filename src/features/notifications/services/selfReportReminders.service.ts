@@ -22,8 +22,15 @@ export async function reconcileSelfReportReminders(events: MyEvent[]): Promise<v
   // schedule against. Once an event actually completes it drops out of
   // /api/events/mine entirely, so this has to be scheduled proactively
   // while the event is still visible — there's no later chance to revisit it.
+  //
+  // DIP-FP-216-mobile: Announcement-type events never get a self-report
+  // reminder — the "Did you attend?" prompt is meaningless for them. Same
+  // exclusion check announcementReminders.service.ts already uses. Excluding
+  // them from `pending` also means the toCancel logic below cancels any
+  // stale reminder scheduled for an Announcement before this fix.
   const pending = events.filter(
     (event) =>
+      event.event_type?.system_key !== "ANNOUNCEMENT" &&
       (event.effective_status === "SCHEDULED" || event.effective_status === "ACTIVE") &&
       new Date(event.end_datetime).getTime() > now
   );
