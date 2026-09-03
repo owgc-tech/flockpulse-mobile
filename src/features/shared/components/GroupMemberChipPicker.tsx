@@ -28,6 +28,11 @@ interface GroupMemberChipPickerProps {
   // entirely (search and select individuals only) — built now, unused
   // until FP-163 wires it up to an actual individual-only call site.
   individualOnly?: boolean;
+  // DIP-FP-214-mobile: when true, the collapsed trigger gets a red border,
+  // matching the blank-required-field highlighting on the Create/Edit Event
+  // screens. Optional — the task pickers that also consume this component
+  // never pass it.
+  invalid?: boolean;
 }
 
 type Chip = { kind: "group" | "member"; id: string; label: string };
@@ -62,10 +67,17 @@ function getThemedStyles(colors: ThemeColors) {
     optionLabel: { color: colors.text },
     emptyText: { color: colors.textSecondary },
     error: { color: colors.danger },
+    invalidInput: { borderColor: colors.danger, borderWidth: 1.5 },
   });
 }
 
-export function GroupMemberChipPicker({ label, value, onChange, individualOnly = false }: GroupMemberChipPickerProps) {
+export function GroupMemberChipPicker({
+  label,
+  value,
+  onChange,
+  individualOnly = false,
+  invalid = false,
+}: GroupMemberChipPickerProps) {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [isOpen, setIsOpen] = useState(false);
@@ -144,7 +156,11 @@ export function GroupMemberChipPicker({ label, value, onChange, individualOnly =
   return (
     <View>
       <Text style={[styles.label, themed.label]}>{label}</Text>
-      <Pressable style={[styles.input, themed.input]} onPress={() => setIsOpen(true)} testID={`picker-open-${label}`}>
+      <Pressable
+        style={[styles.input, themed.input, invalid && themed.invalidInput]}
+        onPress={() => setIsOpen(true)}
+        testID={`picker-open-${label}`}
+      >
         <Text style={themed.inputText}>{selectedCount === 0 ? "Select..." : `${selectedCount} selected`}</Text>
       </Pressable>
 
