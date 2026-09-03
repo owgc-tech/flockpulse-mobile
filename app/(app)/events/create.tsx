@@ -768,7 +768,7 @@ export default function CreateEventScreen() {
           <DateTimePicker
             value={iosDraftDate}
             mode="datetime"
-            display="spinner"
+            display="inline"
             themeVariant="light"
             onChange={(_event, selectedDate) => {
               if (selectedDate) setIosDraftDate(selectedDate);
