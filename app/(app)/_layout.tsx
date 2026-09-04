@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
-import { Redirect, Stack } from "expo-router";
+import { Redirect, Stack, router } from "expo-router";
+import type { NotificationResponse } from "expo-notifications";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signOut } from "@/src/features/auth/services/auth.service";
 import {
@@ -11,6 +12,11 @@ import {
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
 import { CommunityBanner } from "@/src/features/tenant/components/CommunityBanner";
+import {
+  consumePendingNotificationResponse,
+  subscribeToPendingNotification,
+} from "@/src/features/notifications/pendingNotificationSignal";
+import type { NotificationDataPayload, NotificationType } from "@/src/features/notifications/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -25,6 +31,47 @@ function getThemedStyles(colors: ThemeColors) {
     title: { color: colors.text },
     button: { backgroundColor: colors.accent },
     linkText: { color: colors.accent },
+  });
+}
+
+// DIP-FP-217-mobile: moved here verbatim from app/_layout.tsx's
+// navigateFromNotification(). Route targets and type-dispatch logic are
+// unchanged — the only difference is *where* this runs: the drain effect
+// below calls it only once this group's gate is "ready", so a push never
+// races the gate's redirect logic.
+function navigateFromNotification(response: NotificationResponse) {
+  const data = response.notification.request.content.data as Partial<NotificationDataPayload> | undefined;
+  if (!data) return;
+
+  // Backward compat: notifications scheduled by pre-FP-97/98 code never had
+  // a `type` field at all — treat a missing type as the original "reminder"
+  // behavior rather than dropping an already-scheduled notification's tap
+  // silently once this update lands.
+  const type: NotificationType = data.type ?? "reminder";
+
+  if (type === "confirmation") {
+    // No event-specific data in this payload by design (Grounding Check) —
+    // the confirmations list screen queries GET /api/confirmations/pending
+    // fresh itself.
+    router.push("/(app)/confirmations");
+    return;
+  }
+
+  if (type === "self-report") {
+    // DIP-FP-152: mirrors the confirmation handler above exactly — the
+    // standalone events/[id]/self-report screen this used to deep-link into
+    // is retired, so this routes to the Self-Report tab instead, which
+    // queries GET /api/self-reports/pending fresh itself. No event-specific
+    // params needed.
+    router.push("/(app)/(tabs)/self-report");
+    return;
+  }
+
+  if (!data.eventId || !data.event) return;
+
+  router.push({
+    pathname: "/(app)/events/[id]",
+    params: { id: data.eventId, event: data.event },
   });
 }
 
@@ -134,6 +181,23 @@ export default function AppLayout() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, session?.access_token, session?.user.id]);
+
+  // DIP-FP-217-mobile: drain the parked notification-tap response (see
+  // pendingNotificationSignal.ts) only once this group's gate is "ready", so
+  // navigateFromNotification's router.push lands after the gate can no
+  // longer redirect it away. The immediate drain() covers a cold launch
+  // (response parked before the gate resolved); the subscription covers a
+  // live tap that arrives while we're already "ready" (gate.phase wouldn't
+  // change, so this effect wouldn't otherwise re-run).
+  useEffect(() => {
+    if (gate.phase !== "ready") return;
+    const drain = () => {
+      const response = consumePendingNotificationResponse();
+      if (response) navigateFromNotification(response);
+    };
+    drain();
+    return subscribeToPendingNotification(drain);
+  }, [gate.phase]);
 
   if (gate.phase === "loading") {
     return (
