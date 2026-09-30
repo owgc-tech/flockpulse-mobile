@@ -129,6 +129,14 @@ async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<st
 type ScreenEvent = MyEvent &
   Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id" | "acknowledged_at">>;
 
+// DIP-FP-225-mobile: compared on local calendar-date parts (year/month/day),
+// not the raw ISO timestamps — two instants can fall on the same
+// timezone-local day despite differing ISO date substrings (or vice versa),
+// so this is the only correct way to detect a genuine multi-day span.
+function isSameLocalDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 function formatDateTimeRange(startIso: string, endIso: string): string {
   const start = new Date(startIso);
   const end = new Date(endIso);
@@ -139,7 +147,20 @@ function formatDateTimeRange(startIso: string, endIso: string): string {
   });
   const startTime = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const endTime = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${dateLabel} · ${startTime} – ${endTime}`;
+
+  if (isSameLocalDay(start, end)) {
+    return `${dateLabel} · ${startTime} – ${endTime}`;
+  }
+
+  // Multi-day: the end's time-only ("– 9:00 AM") reads as same-day and is
+  // misleading, so it gets the same full weekday/month/day treatment as the
+  // start instead of just its time.
+  const endDateLabel = end.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+  return `${dateLabel} · ${startTime} – ${endDateLabel} · ${endTime}`;
 }
 
 // Member-branch read-only copy when RSVP controls aren't editable
@@ -422,6 +443,9 @@ export default function EventDetailScreen() {
       </View>
 
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
+      {event.event_type ? (
+        <Text style={[styles.meta, themed.meta]}>{event.event_type.name}</Text>
+      ) : null}
       <Text style={[styles.meta, themed.meta]}>{formatDateTimeRange(event.start_datetime, event.end_datetime)}</Text>
       {isAnnouncement ? (
         // DIP-FP-191-mobile-adj-1: same replacement as EventListItem.tsx —
