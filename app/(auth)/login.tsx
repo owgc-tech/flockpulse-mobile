@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import * as Updates from "expo-updates";
 import { LoginForm } from "@/src/features/auth/components/LoginForm";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signInWithPassword } from "@/src/features/auth/services/auth.service";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -60,6 +61,10 @@ export default function LoginScreen() {
           />
         </View>
         <LoginForm onSubmit={isNavigating ? async () => {} : handleSubmit} />
+        {/* TEMP DIAGNOSTIC — remove before release: surfaces active OTA update + API target for field debugging */}
+        <Text style={[styles.diagnostic, themed.poweredBy]}>
+          Update: {Updates.updateId ?? "embedded"} | API: {process.env.EXPO_PUBLIC_API_BASE_URL}
+        </Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -83,6 +88,12 @@ const styles = StyleSheet.create({
   poweredBy: {
     fontSize: 13,
     marginBottom: 4,
+  },
+  diagnostic: {
+    position: "absolute",
+    bottom: 12,
+    fontSize: 10,
+    textAlign: "center",
   },
   logo: {
     // FlockPulseLogo2_AP5.png is a square/stacked mark (measured source: 2000x2000,
