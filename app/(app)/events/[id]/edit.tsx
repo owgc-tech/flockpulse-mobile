@@ -18,6 +18,7 @@ import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/d
 import { ApiError } from "@/src/lib/api";
 import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
+import { LOCATION_ADDRESS_MAX_LENGTH, validateLocationAddress } from "@/src/features/events/utils";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import {
   createEventTaskAssignment,
@@ -592,6 +593,15 @@ export default function EditEventScreen() {
       return;
     }
 
+    // FP-219-mobile: format/length check on the address (blank already
+    // handled above) — mirrors web's validateLocationAddress exactly.
+    const addressError = validateLocationAddress(locationAddress);
+    if (addressError) {
+      setFieldErrors({ locationAddress: true });
+      setError(addressError);
+      return;
+    }
+
     setFieldErrors({});
     setIsSubmitting(true);
     try {
@@ -849,6 +859,7 @@ export default function EditEventScreen() {
       <TextInput
         style={[styles.input, themed.input, fieldErrors.locationAddress && themed.invalidField]}
         value={locationAddress}
+        maxLength={LOCATION_ADDRESS_MAX_LENGTH}
         onChangeText={(text) => {
           setLocationAddress(text);
           if (text.trim()) setFieldErrors((prev) => ({ ...prev, locationAddress: false }));
