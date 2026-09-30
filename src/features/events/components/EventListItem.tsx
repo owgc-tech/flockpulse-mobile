@@ -102,6 +102,9 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
         </View>
       ) : null}
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
+      {event.event_type ? (
+        <Text style={[styles.meta, themed.meta]}>{event.event_type.name}</Text>
+      ) : null}
       <Text style={[styles.meta, themed.meta]}>{formatDateTime(event.start_datetime)}</Text>
       {isAnnouncement ? (
         // DIP-FP-191-mobile-adj-1: Announcement events carry placeholder
