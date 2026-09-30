@@ -159,10 +159,17 @@ export default function MyEventsScreen() {
   // never gated by time" from the original FP-191 story); every other
   // event keeps its exact existing rsvp_status/isRsvpWindowOpen logic,
   // untouched.
+  // DIP-FP-223-mobile-adj-1: an Admin or owning Leader can now see events
+  // they were never invited to (FP-223's widened visibility) — is_attendee
+  // false means exactly that, so those events must not contribute to the
+  // badge regardless of rsvp_status/isRsvpWindowOpen. Announcements are
+  // unaffected — is_attendee is an RSVP-targeting signal, not acknowledgment.
   const pendingRsvpCount = useMemo(
     () =>
       events.filter((e) =>
-        e.event_type?.system_key === "ANNOUNCEMENT" ? !e.acknowledged_at : !e.rsvp_status && isRsvpWindowOpen(e)
+        e.event_type?.system_key === "ANNOUNCEMENT"
+          ? !e.acknowledged_at
+          : !e.rsvp_status && e.is_attendee && isRsvpWindowOpen(e)
       ).length,
     [events]
   );
