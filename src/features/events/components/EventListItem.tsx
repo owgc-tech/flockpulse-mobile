@@ -166,10 +166,14 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
               {RSVP_LABELS[event.rsvp_status]}
             </Text>
           </View>
-        ) : isRsvpWindowOpen(event) ? (
+        ) : isRsvpWindowOpen(event) && event.is_attendee ? (
           // isRsvpWindowOpen already requires effective_status === "SCHEDULED",
           // so CANCELLED events (isCancelled above) never reach this branch —
           // they keep their existing red-tint treatment untouched instead.
+          // DIP-FP-223-mobile-adj-1: is_attendee false means an Admin/owning
+          // Leader is seeing this via FP-223's widened visibility, not a
+          // genuine invite — same "suppress rather than show a meaningless
+          // prompt" treatment as the Announcement branch above.
           <Text style={[styles.rsvpText, themed.rsvpPromptText]}>Please RSVP now.</Text>
         ) : null}
       </View>
