@@ -60,3 +60,21 @@ export function getRsvpStatusColor(colors: ThemeColors, status: RsvpStatus | nul
       return colors.textMuted;
   }
 }
+
+// FP-219-mobile: mirrors web's validateLocationAddress (event.types.ts) so the
+// two clients reject the same input — a length cap plus a rejection of
+// obviously-junk input (blank, or one character repeated throughout, e.g.
+// "aaaaaaaa"). Shared by create.tsx and edit.tsx so the two screens can't
+// drift. Not real address verification; server-side enforcement already
+// covers both apps since they call the same routes.
+export const LOCATION_ADDRESS_MAX_LENGTH = 200;
+
+export function validateLocationAddress(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return "Location address is required";
+  if (value.length > LOCATION_ADDRESS_MAX_LENGTH) {
+    return `Location address must be ${LOCATION_ADDRESS_MAX_LENGTH} characters or fewer`;
+  }
+  if (/^([\s\S])\1*$/u.test(trimmed)) return "Enter a valid location address";
+  return null;
+}

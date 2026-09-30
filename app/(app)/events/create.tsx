@@ -23,6 +23,7 @@ import {
   publishEvent,
 } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
+import { LOCATION_ADDRESS_MAX_LENGTH, validateLocationAddress } from "@/src/features/events/utils";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import { createEventTaskAssignment, listTasks } from "@/src/features/tasks/services/tasks.service";
 import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
@@ -508,6 +509,15 @@ export default function CreateEventScreen() {
         setError("Please select at least one target group or member.");
         return;
       }
+
+      // FP-219-mobile: format/length check on the address (blank already
+      // handled above) — mirrors web's validateLocationAddress exactly.
+      const addressError = validateLocationAddress(locationAddress);
+      if (addressError) {
+        setFieldErrors({ locationAddress: true });
+        setError(addressError);
+        return;
+      }
     }
 
     setFieldErrors({});
@@ -826,6 +836,7 @@ export default function CreateEventScreen() {
           <TextInput
             style={[styles.input, themed.input, fieldErrors.locationAddress && themed.invalidField]}
             value={locationAddress}
+            maxLength={LOCATION_ADDRESS_MAX_LENGTH}
             onChangeText={(text) => {
               setLocationAddress(text);
               if (text.trim()) setFieldErrors((prev) => ({ ...prev, locationAddress: false }));
