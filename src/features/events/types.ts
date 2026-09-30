@@ -88,19 +88,21 @@ export interface MyEvent {
   // (EventListRow) — true only when the caller has a genuine event_attendees
   // row. FP-223 widened visibility (Admins see every event, Leader-owners
   // see their owned events) without regard to invitation, so this is the
-  // only reliable signal for "was this viewer actually invited." Omitted
-  // from EventDetail below — web's PR #210 only touched /api/events/mine's
-  // query (listEventsForMember), not GET /api/events/:id.
+  // only reliable signal for "was this viewer actually invited."
+  // DIP-FP-223-mobile-adj-2: now also present on EventDetail below — web's
+  // PR #211 (FP-223-web-adj-3) added it to GET /api/events/:id for real
+  // (EventDetailRow extends EventListRow, and getEventById now actually
+  // computes and returns it when callerMemberId is passed, which the route
+  // handler's GET does).
   is_attendee: boolean;
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
 // live against the route handler's select list. Same base fields as MyEvent,
-// but does NOT include rsvp_status/rsvp_reason/is_attendee (only
-// /api/events/mine's list response appends those) — deliberately typed
-// without them here so a fresh-fetch merge (`{ ...prevEvent, ...eventDetail
-// }`) can't accidentally clobber an already-known RSVP/is_attendee with a
-// missing field.
+// but does NOT include rsvp_status/rsvp_reason (only /api/events/mine's list
+// response appends those) — deliberately typed without them here so a
+// fresh-fetch merge (`{ ...prevEvent, ...eventDetail }`) can't accidentally
+// clobber an already-known RSVP with a missing field.
 //
 // DIP-FP-115-mobile-nav-calendar-edit: talk_id and created_by_member_id are
 // both confirmed live on GET /api/events/:id's select list but NOT on
@@ -111,7 +113,7 @@ export interface MyEvent {
 // — see ScreenEvent in events/[id].tsx for how the component that merges
 // this over a partial initial-render object handles the fields not being
 // known yet.
-export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason" | "is_attendee"> & {
+export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   talk_id: string | null;
   created_by_member_id: string | null;
   // Atlas fix-in-place (DIP-FP-132-FP-133-FP-134 PR review): the raw

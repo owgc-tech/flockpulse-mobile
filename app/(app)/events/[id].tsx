@@ -266,16 +266,11 @@ export default function EventDetailScreen() {
           // does — see EventDetail's own doc comment), so those default to
           // null here; a real value only ever arrives via the list-screen
           // merge path.
-          // DIP-FP-223-mobile-adj-1: same reasoning as rsvp_status/rsvp_reason
-          // above — EventDetail doesn't carry is_attendee either (web's PR
-          // #210 only added it to /api/events/mine), so the no-prior-state
-          // path has no real value to put here. Defaults to false (the
-          // conservative "not a confirmed attendee" reading) rather than
-          // true, since nothing on this screen currently reads it anyway —
-          // a real value only ever arrives via the list-screen merge path.
-          setEvent((prev) =>
-            prev ? { ...prev, ...fresh } : { ...fresh, rsvp_status: null, rsvp_reason: null, is_attendee: false }
-          );
+          // DIP-FP-223-mobile-adj-2: is_attendee no longer needs a fallback
+          // default here — web's PR #211 (FP-223-web-adj-3) made
+          // getEventById actually compute and return it for real, so `fresh`
+          // already carries the caller's authoritative value.
+          setEvent((prev) => (prev ? { ...prev, ...fresh } : { ...fresh, rsvp_status: null, rsvp_reason: null }));
         })
         .catch((err) => {
           console.warn("Failed to fresh-fetch event:", err);
@@ -521,13 +516,19 @@ export default function EventDetailScreen() {
 
       {isAnnouncement ? (
         <AnnouncementSection event={event} themed={themed} />
-      ) : (
+      ) : event.is_attendee ? (
         <RsvpSection
           event={event}
           onEventChange={setEvent}
           setRosterRefreshTrigger={setRosterRefreshTrigger}
           themed={themed}
         />
+      ) : (
+        // DIP-FP-223-mobile-adj-2: is_attendee false means an Admin/owning
+        // Leader is viewing this via FP-223's widened visibility, not a
+        // genuine invite — same "suppress rather than show something
+        // broken" treatment as EventListItem's RSVP prompt.
+        null
       )}
 
       {showRoster ? (
