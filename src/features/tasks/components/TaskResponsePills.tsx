@@ -64,15 +64,18 @@ export function TaskResponsePills({ assignmentId, currentResponse, onSubmit }: T
           style={[styles.pill, isCommitted ? themed.commitFilled : themed.commitOutline]}
           onPress={() => handlePress("COMMITTED")}
           accessibilityRole="button"
-          accessibilityLabel="Commit to this task"
+          accessibilityLabel={isCommitted ? "Committed to this task" : "Commit to this task"}
           accessibilityState={{ selected: isCommitted, disabled }}
           testID={`my-task-commit-${assignmentId}`}
         >
           {submitting === "COMMITTED" ? (
             <ActivityIndicator size="small" color={isCommitted ? "#fff" : colors.success} />
           ) : (
-            <Text style={[styles.pillText, isCommitted ? styles.pillTextFilled : themed.commitOutlineText]}>
-              Commit
+            <Text
+              numberOfLines={1}
+              style={[styles.pillText, isCommitted ? styles.pillTextFilled : themed.commitOutlineText]}
+            >
+              {isCommitted ? "Committed" : "Commit"}
             </Text>
           )}
         </Pressable>
@@ -80,15 +83,18 @@ export function TaskResponsePills({ assignmentId, currentResponse, onSubmit }: T
           style={[styles.pill, isRefused ? themed.refuseFilled : themed.refuseOutline]}
           onPress={() => handlePress("REFUSED")}
           accessibilityRole="button"
-          accessibilityLabel="Refuse this task"
+          accessibilityLabel={isRefused ? "Refused this task" : "Refuse this task"}
           accessibilityState={{ selected: isRefused, disabled }}
           testID={`my-task-refuse-${assignmentId}`}
         >
           {submitting === "REFUSED" ? (
             <ActivityIndicator size="small" color={isRefused ? "#fff" : colors.danger} />
           ) : (
-            <Text style={[styles.pillText, isRefused ? styles.pillTextFilled : themed.refuseOutlineText]}>
-              Refuse
+            <Text
+              numberOfLines={1}
+              style={[styles.pillText, isRefused ? styles.pillTextFilled : themed.refuseOutlineText]}
+            >
+              {isRefused ? "Refused" : "Refuse"}
             </Text>
           )}
         </Pressable>
