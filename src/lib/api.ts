@@ -1,4 +1,9 @@
 import { supabase } from "@/src/lib/supabase";
+import {
+  expireSession,
+  isSessionExpiring,
+  recoverSession,
+} from "@/src/features/auth/services/sessionRecovery.service";
 
 // The /api/... routes this hits live in the flockpulse-web Next.js app, a
 // separate deployment from this mobile app — unlike EXPO_PUBLIC_SUPABASE_URL,
@@ -95,16 +100,30 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
 }
 
+function sessionEndedError(): ApiError {
+  return new ApiError("AUTH_REQUIRED", "No active session.", 401);
+}
+
 // Mirrors flockpulse-web's own API shape exactly: Authorization: Bearer
 // <access_token> (no cookies anywhere in this API surface), and every
 // response is either { data } or { error: { code, message } }.
+//
+// FP-230: a 401 INVALID_TOKEN (the server uses it for an expired/invalid
+// token, a missing tenant claim, and a removed/deactivated member alike —
+// deliberately not told apart here) triggers one forced session refresh and
+// one retry; if the session is dead, or the retry is rejected again, the user
+// is signed out and the auth gate returns them to login.
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  return request<T>(path, init, false);
+}
+
+async function request<T>(path: string, init: RequestInit | undefined, isRetry: boolean): Promise<T> {
   const {
     data: { session },
   } = await withTimeout(supabase.auth.getSession());
 
   if (!session) {
-    throw new ApiError("AUTH_REQUIRED", "No active session.", 401);
+    throw sessionEndedError();
   }
 
   const controller = new AbortController();
@@ -141,6 +160,33 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       ownedGroupCount = null,
       ownedEventCount = null,
     } = body.error ?? {};
+
+    if (response.status === 401 && code === "INVALID_TOKEN") {
+      // Another request already gave up on this session: don't refresh or
+      // sign out again, and don't flash the raw token error on screens that
+      // are about to be redirected.
+      if (isSessionExpiring()) {
+        throw sessionEndedError();
+      }
+
+      if (isRetry) {
+        await expireSession();
+        throw sessionEndedError();
+      }
+
+      const outcome = await recoverSession();
+      if (outcome === "refreshed") {
+        return request<T>(path, init, true);
+      }
+      if (outcome === "dead") {
+        await expireSession();
+        throw sessionEndedError();
+      }
+      // "unknown": timeout / network / 5xx while refreshing — never sign
+      // out; surface the same friendly message FP-206 uses (Try Again).
+      throw timeoutError();
+    }
+
     throw new ApiError(code, message, response.status, conflict, assignedMemberCount, ownedGroupCount, ownedEventCount);
   }
 

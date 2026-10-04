@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/src/lib/supabase";
 import type { Factor } from "@supabase/supabase-js";
 import type { AuthenticatorAssuranceStatus, TotpEnrollment } from "@/src/features/auth/types";
@@ -88,4 +89,40 @@ export async function requestPasswordReset(email: string, redirectTo?: string) {
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
+}
+
+// FP-230: unlike signOut() above this never throws and guarantees the local
+// session is gone. Confirmed in the installed @supabase/auth-js (2.110.8,
+// GoTrueClient._signOut): when the server-side logout call fails for any
+// reason other than 401/403/404, it removes the local session and *then*
+// returns the error — but when its up-front session read fails (e.g. the
+// stored access token is expired and the refresh it triggers hits a network
+// error) it returns the error WITHOUT removing anything. That second case is
+// exactly the dead-session-plus-flaky-network one, so on any error or throw
+// the persisted session is wiped directly and signOut() is called again:
+// with nothing stored it makes no server call and just removes the (empty)
+// session and emits SIGNED_OUT, which is what sends the gate to login and
+// lets useSession clear the trusted-device flag.
+export async function forceLocalSignOut(): Promise<void> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (!error) return;
+  } catch {
+    // fall through to the forced wipe
+  }
+
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    await AsyncStorage.multiRemove(
+      keys.filter((key) => /^sb-.+-auth-token(-user|-code-verifier)?$/.test(key))
+    );
+  } catch {
+    // nothing more can be done locally; the second signOut below still tries
+  }
+
+  try {
+    await supabase.auth.signOut();
+  } catch {
+    // swallowed on purpose — callers must never be blocked by sign-out failure
+  }
 }

@@ -3,6 +3,7 @@ import { Image, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "r
 import { router } from "expo-router";
 import * as Updates from "expo-updates";
 import { LoginForm } from "@/src/features/auth/components/LoginForm";
+import { consumeSessionExpiredNotice, SESSION_EXPIRED_MESSAGE } from "@/src/features/auth/sessionExpiredNotice";
 import { getAssuranceLevel, hasEnrolledTotpFactor, signInWithPassword } from "@/src/features/auth/services/auth.service";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -14,6 +15,7 @@ function getThemedStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { backgroundColor: colors.background },
     poweredBy: { color: colors.textSecondary },
+    notice: { color: colors.danger },
   });
 }
 
@@ -21,6 +23,8 @@ export default function LoginScreen() {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [isNavigating, setIsNavigating] = useState(false);
+  // FP-230: consumed once on mount so the message shows a single time.
+  const [showSessionNotice] = useState(() => consumeSessionExpiredNotice());
 
   const handleSubmit = async (email: string, password: string) => {
     await signInWithPassword(email, password);
@@ -60,6 +64,9 @@ export default function LoginScreen() {
             accessibilityLabel="FlockPulse"
           />
         </View>
+        {showSessionNotice && (
+          <Text style={[styles.notice, themed.notice]}>{SESSION_EXPIRED_MESSAGE}</Text>
+        )}
         <LoginForm onSubmit={isNavigating ? async () => {} : handleSubmit} />
         {/* TEMP DIAGNOSTIC — remove before release: surfaces active OTA update + API target for field debugging */}
         <Text style={[styles.diagnostic, themed.poweredBy]}>
@@ -88,6 +95,11 @@ const styles = StyleSheet.create({
   poweredBy: {
     fontSize: 13,
     marginBottom: 4,
+  },
+  notice: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
   },
   diagnostic: {
     position: "absolute",
