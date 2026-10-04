@@ -18,7 +18,14 @@ import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/d
 import { ApiError } from "@/src/lib/api";
 import { listMeetingResources, listMyEvents, updateEvent } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
-import { LOCATION_ADDRESS_MAX_LENGTH, validateLocationAddress } from "@/src/features/events/utils";
+import {
+  formatTaskAssignmentFailures,
+  isRemovableTask,
+  LOCATION_ADDRESS_MAX_LENGTH,
+  planTaskAssignmentOps,
+  runTaskAssignmentOps,
+  validateLocationAddress,
+} from "@/src/features/events/utils";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import {
   createEventTaskAssignment,
@@ -435,6 +442,9 @@ export default function EditEventScreen() {
   const [existingAssignments, setExistingAssignments] = useState<EventTaskAssignment[]>([]);
   const [taskAssignments, setTaskAssignments] = useState<Record<string, TargetSelection>>({});
   const [addedTaskIds, setAddedTaskIds] = useState<string[]>([]);
+  // FP-234: added (non-core) tasks the user hid with Remove. Local only —
+  // nothing is sent until Save, so leaving without saving undoes it.
+  const [removedTaskIds, setRemovedTaskIds] = useState<string[]>([]);
 
   const [error, setError] = useState<string | null>(null);
   // DIP-FP-214-mobile: which required fields were blank on the last failed
@@ -477,8 +487,11 @@ export default function EditEventScreen() {
   // immediately, same as the three core tasks always are — not something
   // the user has to "Add" back in.
   const preAssignedNonCoreTaskIds = useMemo(
-    () => existingAssignments.map((a) => a.task_id).filter((id) => !coreTasks.some((t) => t.id === id)),
-    [existingAssignments, coreTasks]
+    () =>
+      existingAssignments
+        .map((a) => a.task_id)
+        .filter((id) => !coreTasks.some((t) => t.id === id) && !removedTaskIds.includes(id)),
+    [existingAssignments, coreTasks, removedTaskIds]
   );
   const addedTasks = useMemo(
     () => tasks.filter((t) => addedTaskIds.includes(t.id) || preAssignedNonCoreTaskIds.includes(t.id)),
@@ -503,6 +516,22 @@ export default function EditEventScreen() {
 
   const setTaskAssignment = (taskId: string, selection: TargetSelection) => {
     setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
+  };
+
+  // FP-234: hides the row and drops any in-progress selection; the stored
+  // assignment (if any) is deleted on Save.
+  const handleRemoveTask = (taskId: string) => {
+    setRemovedTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
+    setAddedTaskIds((prev) => prev.filter((id) => id !== taskId));
+    setTaskAssignments((prev) => {
+      const { [taskId]: _dropped, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  const handleAddTask = (taskId: string) => {
+    setRemovedTaskIds((prev) => prev.filter((id) => id !== taskId));
+    setAddedTaskIds((prev) => (prev.includes(taskId) ? prev : [...prev, taskId]));
   };
 
   // DIP-FP-189-adj-1 addition, not in the DIP's original file list: this
@@ -631,27 +660,22 @@ export default function EditEventScreen() {
       // a follow-up step against existingAssignments — created for newly-
       // assigned tasks, updated for changed assignees, deleted for
       // cleared/removed ones. A task left with an empty selection and no
-      // prior assignment is a no-op.
-      try {
-        await Promise.all(
-          displayedTasks.map(async (task) => {
-            const existing = existingAssignments.find((a) => a.task_id === task.id);
-            const selection = taskAssignments[task.id] ?? initialAssignmentSelection(task.id);
-            const hasSelection = selection.group_ids.length > 0 || selection.member_ids.length > 0;
-
-            if (existing && !hasSelection) {
-              await deleteEventTaskAssignment(existing.id);
-            } else if (existing && hasSelection) {
-              await updateEventTaskAssignment(existing.id, selection);
-            } else if (!existing && hasSelection) {
-              await createEventTaskAssignment(params.id, task.id, selection);
-            }
-          })
-        );
-      } catch (err) {
-        setError(
-          `Event updated but one or more task assignments could not be saved${err instanceof Error ? `: ${err.message}` : "."}`
-        );
+      // prior assignment is a no-op. FP-234: unchanged assignments send
+      // nothing, tasks removed with Remove delete their stored assignment,
+      // and every failure is reported by task name.
+      const ops = planTaskAssignmentOps({
+        displayedTasks,
+        removedTasks: tasks.filter((t) => removedTaskIds.includes(t.id)),
+        existing: existingAssignments,
+        getSelection: (taskId) => taskAssignments[taskId] ?? initialAssignmentSelection(taskId),
+      });
+      const failures = await runTaskAssignmentOps(ops, {
+        create: (taskId, selection) => createEventTaskAssignment(params.id, taskId, selection),
+        update: updateEventTaskAssignment,
+        delete: deleteEventTaskAssignment,
+      });
+      if (failures.length > 0) {
+        setError(formatTaskAssignmentFailures(failures));
         setIsSubmitting(false);
         return;
       }
@@ -951,13 +975,24 @@ export default function EditEventScreen() {
 
       <Text style={[styles.label, themed.label]}>Tasks</Text>
       {displayedTasks.map((task) => (
-        <GroupMemberChipPicker
-          key={task.id}
-          label={`${task.name} (optional)`}
-          value={taskAssignments[task.id] ?? initialAssignmentSelection(task.id)}
-          onChange={(selection) => setTaskAssignment(task.id, selection)}
-          individualOnly={task.individual_only}
-        />
+        <View key={task.id}>
+          <GroupMemberChipPicker
+            label={`${task.name} (optional)`}
+            value={taskAssignments[task.id] ?? initialAssignmentSelection(task.id)}
+            onChange={(selection) => setTaskAssignment(task.id, selection)}
+            individualOnly={task.individual_only}
+          />
+          {isRemovableTask(task.name) ? (
+            <Pressable
+              onPress={() => handleRemoveTask(task.id)}
+              disabled={isSubmitting}
+              style={styles.removeTaskLink}
+              testID={`edit-event-remove-task-${task.id}`}
+            >
+              <Text style={[styles.linkText, themed.linkText]}>Remove</Text>
+            </Pressable>
+          ) : null}
+        </View>
       ))}
 
       {availableToAddTasks.length > 0 ? (
@@ -968,7 +1003,7 @@ export default function EditEventScreen() {
               <Pressable
                 key={task.id}
                 style={[styles.optionButton, themed.optionButton]}
-                onPress={() => setAddedTaskIds((prev) => [...prev, task.id])}
+                onPress={() => handleAddTask(task.id)}
                 disabled={isSubmitting}
                 testID={`edit-event-add-task-${task.id}`}
               >
@@ -1114,6 +1149,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     marginBottom: 8,
+  },
+  removeTaskLink: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
   },
   linkText: {
     color: "#2563eb",

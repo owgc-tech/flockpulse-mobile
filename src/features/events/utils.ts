@@ -1,6 +1,9 @@
 import { Linking, Platform } from "react-native";
 import type { MyEvent, RsvpStatus } from "@/src/features/events/types";
 import type { ThemeColors } from "@/src/theme/colors";
+import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
+import type { EventTaskAssignment } from "@/src/features/tasks/types";
+import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 
 // DIP-FP-147: prefer whatever's actually installed/preferred on-device
 // instead of always handing off to a Google Maps web URL, which on iOS
@@ -77,4 +80,125 @@ export function validateLocationAddress(value: string): string | null {
   }
   if (/^([\s\S])\1*$/u.test(trimmed)) return "Enter a valid location address";
   return null;
+}
+
+// FP-234: same behavior as flockpulse-web's sameIds (EventForm.tsx) — order
+// never matters, only membership.
+export function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((id, i) => id === sb[i]);
+}
+
+// FP-234: core tasks (Food Assignment, Prayer Leader, Music) are never
+// removable from an event, exactly like web.
+export function isRemovableTask(taskName: string): boolean {
+  return !CORE_TASK_NAMES.includes(taskName);
+}
+
+export interface TaskAssignmentOp {
+  kind: "create" | "update" | "delete";
+  taskId: string;
+  taskName: string;
+  assignmentId?: string;
+  selection?: TargetSelection;
+}
+
+interface TaskRef {
+  id: string;
+  name: string;
+}
+
+// FP-234: decides what the edit screen's Save must send for task
+// assignments. `existing` must be the rows as loaded from the server (not
+// edited state): an unchanged assignment (same group_ids and member_ids,
+// order ignored) produces no op at all. Covers displayed tasks plus removed
+// tasks that already have an assignment (web's "visible UNION already
+// assigned"), so removing a row deletes its stored assignment on Save and
+// sends nothing when it had none. Only tasks explicitly in `removedTasks`
+// are ever deleted this way — a task merely missing from the catalog is left
+// alone.
+export function planTaskAssignmentOps(args: {
+  displayedTasks: TaskRef[];
+  removedTasks: TaskRef[];
+  existing: EventTaskAssignment[];
+  getSelection: (taskId: string) => TargetSelection;
+}): TaskAssignmentOp[] {
+  const ops: TaskAssignmentOp[] = [];
+  const displayedIds = new Set(args.displayedTasks.map((t) => t.id));
+
+  for (const task of args.displayedTasks) {
+    const existing = args.existing.find((a) => a.task_id === task.id);
+    const selection = args.getSelection(task.id);
+    const hasSelection = selection.group_ids.length > 0 || selection.member_ids.length > 0;
+
+    if (existing && !hasSelection) {
+      ops.push({ kind: "delete", taskId: task.id, taskName: task.name, assignmentId: existing.id });
+    } else if (existing && hasSelection) {
+      const loaded = existing.assignee;
+      const unchanged =
+        sameIds(loaded?.group_ids ?? [], selection.group_ids) &&
+        sameIds(loaded?.member_ids ?? [], selection.member_ids);
+      if (!unchanged) {
+        ops.push({ kind: "update", taskId: task.id, taskName: task.name, assignmentId: existing.id, selection });
+      }
+    } else if (!existing && hasSelection) {
+      ops.push({ kind: "create", taskId: task.id, taskName: task.name, selection });
+    }
+  }
+
+  for (const task of args.removedTasks) {
+    if (displayedIds.has(task.id)) continue;
+    const existing = args.existing.find((a) => a.task_id === task.id);
+    if (existing) {
+      ops.push({ kind: "delete", taskId: task.id, taskName: task.name, assignmentId: existing.id });
+    }
+  }
+
+  return ops;
+}
+
+export interface TaskAssignmentExecutor {
+  create: (taskId: string, selection: TargetSelection) => Promise<unknown>;
+  update: (assignmentId: string, selection: TargetSelection) => Promise<unknown>;
+  delete: (assignmentId: string) => Promise<unknown>;
+}
+
+export interface TaskAssignmentFailure {
+  taskName: string;
+  message: string;
+}
+
+// FP-234: attempts every op (one failure never stops the others) and
+// returns the failures by task name.
+export async function runTaskAssignmentOps(
+  ops: TaskAssignmentOp[],
+  executor: TaskAssignmentExecutor
+): Promise<TaskAssignmentFailure[]> {
+  const results = await Promise.allSettled(
+    ops.map((op) => {
+      if (op.kind === "delete") return executor.delete(op.assignmentId!);
+      if (op.kind === "update") return executor.update(op.assignmentId!, op.selection!);
+      return executor.create(op.taskId, op.selection!);
+    })
+  );
+
+  const failures: TaskAssignmentFailure[] = [];
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      const reason = result.reason;
+      failures.push({
+        taskName: ops[i].taskName,
+        message: reason instanceof Error ? reason.message : "Something went wrong.",
+      });
+    }
+  });
+  return failures;
+}
+
+export function formatTaskAssignmentFailures(failures: TaskAssignmentFailure[]): string {
+  return `Event updated but these task assignments could not be saved: ${failures
+    .map((f) => `${f.taskName}: ${f.message}`)
+    .join("; ")}`;
 }
