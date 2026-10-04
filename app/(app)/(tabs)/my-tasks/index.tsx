@@ -90,7 +90,7 @@ export default function MyTasksScreen() {
   );
 
   // FP-221: pills' submit handler. Success: take my_response from the server
-  // reply and resync the badge right away. VALIDATION_ERROR / FORBIDDEN_SCOPE
+  // reply and resync the badge right away. VALIDATION_ERROR / FORBIDDEN_SCOPE / NOT_FOUND
   // (event started/ended, or the person was replaced): reload so the card
   // reflects reality, then rethrow so the card still shows the server message.
   // Any other failure just rethrows — the card shows it and the previous
@@ -103,7 +103,10 @@ export default function MyTasksScreen() {
         console.warn("Failed to sync My Tasks badge:", err);
       });
     } catch (err) {
-      if (err instanceof ApiError && (err.code === "VALIDATION_ERROR" || err.code === "FORBIDDEN_SCOPE")) {
+      if (
+        err instanceof ApiError &&
+        (err.code === "VALIDATION_ERROR" || err.code === "FORBIDDEN_SCOPE" || err.code === "NOT_FOUND")
+      ) {
         await load();
       }
       throw err;

@@ -28,8 +28,12 @@ interface TaskResponsePillsProps {
 
 // FP-221: Commit / Refuse pills for one My Tasks card. The chosen pill is
 // filled, the other outlined, neither filled while currentResponse is null.
-// Nested Pressables take the touch, so a pill tap never reaches the card's
-// own navigation onPress. Submitting state is per-card (local).
+// The pills are nested Pressables, so a tap on an enabled pill is claimed by
+// it and doesn't reach the card's navigation onPress. They are deliberately
+// NOT set `disabled` while sending: a disabled Pressable doesn't claim the
+// touch, so a second tap in the in-flight window would fall through to the
+// card. handlePress's guard ignores presses while sending instead.
+// Submitting state is per-card (local).
 export function TaskResponsePills({ assignmentId, currentResponse, onSubmit }: TaskResponsePillsProps) {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
@@ -59,7 +63,6 @@ export function TaskResponsePills({ assignmentId, currentResponse, onSubmit }: T
         <Pressable
           style={[styles.pill, isCommitted ? themed.commitFilled : themed.commitOutline]}
           onPress={() => handlePress("COMMITTED")}
-          disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel="Commit to this task"
           accessibilityState={{ selected: isCommitted, disabled }}
@@ -76,7 +79,6 @@ export function TaskResponsePills({ assignmentId, currentResponse, onSubmit }: T
         <Pressable
           style={[styles.pill, isRefused ? themed.refuseFilled : themed.refuseOutline]}
           onPress={() => handlePress("REFUSED")}
-          disabled={disabled}
           accessibilityRole="button"
           accessibilityLabel="Refuse this task"
           accessibilityState={{ selected: isRefused, disabled }}

@@ -15,7 +15,8 @@ export async function syncMyTasksBadge(): Promise<number> {
   try {
     const assignments = await listMyTaskAssignments();
     // FP-221: only tasks the person has not yet committed to or refused.
-    count = assignments.filter((a) => a.my_response === null).length;
+    // Loose == null on purpose: a row without the field counts as unanswered.
+    count = assignments.filter((a) => a.my_response == null).length;
   } catch {
     count = 0;
   }
