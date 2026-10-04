@@ -1,48 +1,24 @@
 import { useEffect } from "react";
 import { StyleSheet, useColorScheme } from "react-native";
-import { router, Stack } from "expo-router";
+import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
 import "@/src/lib/supabase";
-import type { NotificationDataPayload, NotificationType } from "@/src/features/notifications/types";
+import { setPendingNotificationResponse } from "@/src/features/notifications/pendingNotificationSignal";
 import { ThemePreferenceProvider, useThemePreference } from "@/src/theme/ThemePreferenceContext";
 
+// DIP-FP-217-mobile: this root layout only *detects* a notification tap — it
+// no longer routes from here. Every screen a tap can open lives in the (app)
+// group, which has its own async gate (session load + MFA check) that must
+// reach "ready" first; a router.push() fired from here before that resolves
+// races the gate's own redirect logic and the intended destination can be
+// swallowed (most visibly on a cold launch). The response is parked in
+// pendingNotificationSignal and drained by app/(app)/_layout.tsx once its
+// gate is ready.
 function navigateFromNotification(response: Notifications.NotificationResponse) {
-  const data = response.notification.request.content.data as Partial<NotificationDataPayload> | undefined;
-  if (!data) return;
-
-  // Backward compat: notifications scheduled by pre-FP-97/98 code never had
-  // a `type` field at all — treat a missing type as the original "reminder"
-  // behavior rather than dropping an already-scheduled notification's tap
-  // silently once this update lands.
-  const type: NotificationType = data.type ?? "reminder";
-
-  if (type === "confirmation") {
-    // No event-specific data in this payload by design (Grounding Check) —
-    // the confirmations list screen queries GET /api/confirmations/pending
-    // fresh itself.
-    router.push("/(app)/confirmations");
-    return;
-  }
-
-  if (type === "self-report") {
-    // DIP-FP-152: mirrors the confirmation handler above exactly — the
-    // standalone events/[id]/self-report screen this used to deep-link into
-    // is retired, so this routes to the Self-Report tab instead, which
-    // queries GET /api/self-reports/pending fresh itself. No event-specific
-    // params needed.
-    router.push("/(app)/(tabs)/self-report");
-    return;
-  }
-
-  if (!data.eventId || !data.event) return;
-
-  router.push({
-    pathname: "/(app)/events/[id]",
-    params: { id: data.eventId, event: data.event },
-  });
+  setPendingNotificationResponse(response);
 }
 
 // DIP-FP-145: StatusBar previously used style="auto", which follows the OS
