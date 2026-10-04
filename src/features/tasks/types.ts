@@ -59,4 +59,16 @@ export interface MyTaskAssignment {
   end_datetime: string;
   location_name: string;
   effective_status: string;
+  // FP-221: the caller's own current response; null = not yet responded.
+  my_response: TaskResponseStatus | null;
+}
+
+// FP-221: matches flockpulse-web's TaskResponseStatus.
+export type TaskResponseStatus = "COMMITTED" | "REFUSED";
+
+// FP-221: POST /api/event-tasks-assignments/[id]/response's { data }.
+export interface TaskResponseResult {
+  assignment_id: string;
+  status: TaskResponseStatus;
+  responded_at: string;
 }

@@ -2,9 +2,11 @@ import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
-import { listMyTaskAssignments } from "@/src/features/tasks/services/tasks.service";
+import { ApiError } from "@/src/lib/api";
+import { listMyTaskAssignments, submitTaskAssignmentResponse } from "@/src/features/tasks/services/tasks.service";
+import { TaskResponsePills } from "@/src/features/tasks/components/TaskResponsePills";
 import { syncMyTasksBadge } from "@/src/features/notifications/services/myTasksBadge.service";
-import type { MyTaskAssignment } from "@/src/features/tasks/types";
+import type { MyTaskAssignment, TaskResponseStatus } from "@/src/features/tasks/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
 
@@ -87,6 +89,27 @@ export default function MyTasksScreen() {
     }, [load])
   );
 
+  // FP-221: pills' submit handler. Success: take my_response from the server
+  // reply and resync the badge right away. VALIDATION_ERROR / FORBIDDEN_SCOPE
+  // (event started/ended, or the person was replaced): reload so the card
+  // reflects reality, then rethrow so the card still shows the server message.
+  // Any other failure just rethrows — the card shows it and the previous
+  // selection is untouched.
+  const handleRespond = async (item: MyTaskAssignment, status: TaskResponseStatus) => {
+    try {
+      const result = await submitTaskAssignmentResponse(item.id, status);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, my_response: result.status } : i)));
+      syncMyTasksBadge().catch((err) => {
+        console.warn("Failed to sync My Tasks badge:", err);
+      });
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === "VALIDATION_ERROR" || err.code === "FORBIDDEN_SCOPE")) {
+        await load();
+      }
+      throw err;
+    }
+  };
+
   const handlePress = (item: MyTaskAssignment) => {
     router.push({
       pathname: "/(app)/events/[id]",
@@ -129,6 +152,11 @@ export default function MyTasksScreen() {
               <Text style={[styles.eventName, themed.eventName]}>{item.event_name}</Text>
               <Text style={[styles.meta, themed.meta]}>{formatEventDateTime(item.start_datetime)}</Text>
               <Text style={[styles.meta, themed.meta]}>{item.location_name}</Text>
+              <TaskResponsePills
+                assignmentId={item.id}
+                currentResponse={item.my_response}
+                onSubmit={(status) => handleRespond(item, status)}
+              />
             </Pressable>
           )}
         />

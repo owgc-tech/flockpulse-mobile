@@ -1,6 +1,12 @@
 import { apiFetch } from "@/src/lib/api";
 import type { EventTargetSelector } from "@/src/features/events/types";
-import type { EventTaskAssignment, MyTaskAssignment, Task } from "@/src/features/tasks/types";
+import type {
+  EventTaskAssignment,
+  MyTaskAssignment,
+  Task,
+  TaskResponseResult,
+  TaskResponseStatus,
+} from "@/src/features/tasks/types";
 
 export async function listTasks(): Promise<Task[]> {
   return apiFetch<Task[]>("/api/tasks");
@@ -44,4 +50,18 @@ export async function updateEventTaskAssignment(
 
 export async function deleteEventTaskAssignment(id: string): Promise<void> {
   return apiFetch<void>(`/api/event-tasks-assignments/${id}`, { method: "DELETE" });
+}
+
+// FP-221: POST /api/event-tasks-assignments/[id]/response — confirmed against
+// the web route handler on dev. Idempotent server-side; NOT_FOUND,
+// FORBIDDEN_SCOPE (not an assignee) and VALIDATION_ERROR (event no longer
+// scheduled/active) surface as ApiError via apiFetch.
+export async function submitTaskAssignmentResponse(
+  assignmentId: string,
+  status: TaskResponseStatus
+): Promise<TaskResponseResult> {
+  return apiFetch<TaskResponseResult>(`/api/event-tasks-assignments/${assignmentId}/response`, {
+    method: "POST",
+    body: JSON.stringify({ status }),
+  });
 }
