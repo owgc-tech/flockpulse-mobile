@@ -3,6 +3,7 @@ import type { EventTargetSelector } from "@/src/features/events/types";
 import type {
   EventTaskAssignment,
   MyTaskAssignment,
+  RefusedBy,
   Task,
   TaskResponseResult,
   TaskResponseStatus,
@@ -21,7 +22,23 @@ export async function listMyTaskAssignments(): Promise<MyTaskAssignment[]> {
 // GET /api/event-tasks-assignments?event_id= — confirmed live against the
 // route handler's req.nextUrl.searchParams.get('event_id') (snake_case).
 export async function listEventTaskAssignments(eventId: string): Promise<EventTaskAssignment[]> {
-  return apiFetch<EventTaskAssignment[]>(`/api/event-tasks-assignments?event_id=${eventId}`);
+  const rows = await apiFetch<EventTaskAssignment[]>(`/api/event-tasks-assignments?event_id=${eventId}`);
+  return rows.map((row) => ({ ...row, refused_by: normalizeRefusedBy(row.refused_by) }));
+}
+
+// FP-222-adj-1: boundary normalizer — a missing, null or malformed refused_by
+// (older server) becomes [], and entries without a non-empty name are dropped,
+// so the screen never has to defend against it.
+export function normalizeRefusedBy(value: unknown): RefusedBy[] {
+  if (!Array.isArray(value)) return [];
+  const result: RefusedBy[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { member_id, name } = entry as { member_id?: unknown; name?: unknown };
+    if (typeof name !== "string" || name.trim() === "") continue;
+    result.push({ member_id: typeof member_id === "string" ? member_id : "", name: name.trim() });
+  }
+  return result;
 }
 
 // POST /api/event-tasks-assignments — confirmed live against the route

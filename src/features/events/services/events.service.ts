@@ -41,22 +41,15 @@ export async function getEventById(eventId: string): Promise<EventDetail> {
 // retry handling of its own; callers fire-and-forget it and only console.warn
 // on failure.
 //
-// apiFetch always parses a JSON envelope. The web endpoint (web part 1) answers
-// 204 with NO body, which makes response.json() throw a SyntaxError even though
-// the view WAS recorded; web adj-1 changes it to 200 { data: { version } }.
-// A SyntaxError here can only mean "success with an empty body" (a real failure
-// arrives as an ApiError with a code, or a network/timeout error), so it is
-// treated as success — which works against both server versions.
+// The web endpoint answers 200 { data: { version } } (FP-222-web-adj-1; it used
+// to answer 204 with no body, which apiFetch could not parse and which this
+// function used to special-case). Every error is rethrown now; callers are
+// fire-and-forget with console.warn.
 export async function recordEventView(eventId: string, version?: number): Promise<void> {
-  try {
-    await apiFetch<unknown>(`/api/events/${eventId}/view`, {
-      method: "POST",
-      body: JSON.stringify({ version }),
-    });
-  } catch (err) {
-    if (err instanceof SyntaxError) return;
-    throw err;
-  }
+  await apiFetch<unknown>(`/api/events/${eventId}/view`, {
+    method: "POST",
+    body: JSON.stringify({ version }),
+  });
 }
 
 // Callers can branch on err.code (RSVP_CLOSED / RSVP_REASON_REQUIRED /

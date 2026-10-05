@@ -27,8 +27,19 @@ export interface EventTaskAssignment {
   event_id: string;
   task_id: string;
   assignee: EventTargetSelector | null;
+  // FP-222-adj-1: people with a current outstanding refusal on this
+  // assignment, filled by the server only for the event's owner and Admins
+  // (empty for everyone else). Optional so an older server never breaks the
+  // screen; listEventTaskAssignments normalizes it to an array.
+  refused_by?: RefusedBy[];
   created_at: string;
   updated_at: string;
+}
+
+// FP-222-adj-1: matches flockpulse-web's RefusedBy.
+export interface RefusedBy {
+  member_id: string;
+  name: string;
 }
 
 // DIP-FP-161-3-task-wiring: the three tasks always shown on the Event

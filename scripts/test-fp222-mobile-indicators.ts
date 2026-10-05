@@ -156,10 +156,11 @@ async function main() {
   apiCalls.length = 0;
   await service.recordEventView("evt-2");
   check('no version -> body is exactly {}', apiCalls[0]?.init?.body === "{}");
-  apiHandler = () => { throw new SyntaxError("JSON Parse error: Unexpected end of input"); };   // web part 1: 204 with no body
-  let threw = false;
-  try { await service.recordEventView("evt-3", 1); } catch { threw = true; }
-  check("a 204 / empty body (apiFetch's SyntaxError) counts as success (works against web part 1 and adj-1)", !threw);
+  // FP-222-adj-1: the SyntaxError shortcut (web used to answer 204 with no body) is gone.
+  apiHandler = () => { throw new SyntaxError("JSON Parse error: Unexpected end of input"); };
+  let syntaxRethrown = false;
+  try { await service.recordEventView("evt-3", 1); } catch (e) { syntaxRethrown = e instanceof SyntaxError; }
+  check("a SyntaxError is now rethrown, not treated as success", syntaxRethrown);
   apiHandler = () => { const e = new Error("You do not have access to this event") as Error & { code: string }; e.code = "FORBIDDEN_SCOPE"; throw e; };
   let code = "";
   try { await service.recordEventView("evt-4", 1); } catch (e) { code = (e as { code?: string }).code ?? ""; }
@@ -187,6 +188,39 @@ async function main() {
   const ids = signal.consumeViewedEventIds();
   check("signal: consume returns each viewed id once", ids.length === 2 && ids.includes("e1") && ids.includes("e2"));
   check("signal: consuming clears it", signal.consumeViewedEventIds().length === 0);
+
+  // ================================================================ refused_by (FP-222 mobile adj-1)
+  console.log("\n=== refused_by normalizer (listEventTaskAssignments boundary)");
+  const tasksService = await import("../src/features/tasks/services/tasks.service");
+  const norm = tasksService.normalizeRefusedBy;
+  check("missing (undefined) -> []", eq(norm(undefined), []));
+  check("null -> []", eq(norm(null), []));
+  check("wrong types (string / number / object) -> []", eq(norm("Ana"), []) && eq(norm(5), []) && eq(norm({ name: "Ana" }), []));
+  check("empty array -> []", eq(norm([]), []));
+  check("entries without a non-empty name are dropped", eq(norm([{ member_id: "m1", name: "" }, { member_id: "m2", name: "   " }, { member_id: "m3" }, { member_id: "m4", name: 5 }, null, "x", 7]), []));
+  check("valid entries kept (name trimmed), bad ones dropped", eq(norm([{ member_id: "m1", name: " Ana Cruz " }, { member_id: "m2", name: "" }, { member_id: "m3", name: "Ben Lee" }]), [{ member_id: "m1", name: "Ana Cruz" }, { member_id: "m3", name: "Ben Lee" }]));
+  check("non-string member_id tolerated (kept as empty string)", eq(norm([{ member_id: 9, name: "Ana" }]), [{ member_id: "", name: "Ana" }]));
+
+  console.log("\n=== Row mapping: refused_by -> names shown on the detail");
+  apiCalls.length = 0;
+  apiHandler = () => [
+    { id: "a1", task_id: "t1", assignee: { member_ids: ["m1"] }, refused_by: [{ member_id: "m1", name: "Ana Cruz" }] },
+    { id: "a2", task_id: "t2", assignee: { member_ids: ["m2", "m3"] }, refused_by: [{ member_id: "m2", name: "Ben Lee" }, { member_id: "m3", name: "Cy Ortiz" }] },
+    { id: "a3", task_id: "t3", assignee: { member_ids: ["m4"] }, refused_by: [] },
+    { id: "a4", task_id: "t4", assignee: { member_ids: ["m5"] } },                       // older server: field missing
+    { id: "a5", task_id: "t5", assignee: { member_ids: ["m6"] }, refused_by: "garbage" },
+  ];
+  const rows = await tasksService.listEventTaskAssignments("evt-9");
+  check("request is GET /api/event-tasks-assignments?event_id=evt-9", apiCalls.length === 1 && apiCalls[0].path === "/api/event-tasks-assignments?event_id=evt-9");
+  // The detail screen builds refusedBy with exactly this expression and shows the line only when non-empty.
+  const refusedBy = (r: any) => (r.refused_by ?? []).map((x: { name: string }) => x.name);
+  const line = (names: string[]) => (names.length > 0 ? `Refused: ${names.join(", ")}` : null);
+  check('one refuser -> "Refused: Ana Cruz"', line(refusedBy(rows[0])) === "Refused: Ana Cruz");
+  check('several refusers -> "Refused: Ben Lee, Cy Ortiz"', line(refusedBy(rows[1])) === "Refused: Ben Lee, Cy Ortiz");
+  check("no refusals -> no line", line(refusedBy(rows[2])) === null);
+  check("older server (field missing) -> no line, no crash", line(refusedBy(rows[3])) === null && eq(rows[3].refused_by, []));
+  check("malformed field -> no line", line(refusedBy(rows[4])) === null);
+  check("other row fields are preserved", rows[0].id === "a1" && rows[0].task_id === "t1" && eq(rows[0].assignee, { member_ids: ["m1"] }));
 
   // ================================================================ contrast
   console.log("\n=== Banner colour contrast (WCAG), measured from the real theme tokens");
