@@ -70,6 +70,7 @@ function getThemedStyles(colors: ThemeColors) {
     sectionTitle: { color: colors.text },
     fieldLabel: { color: colors.text },
     fieldValue: { color: colors.text },
+    refusedLine: { color: colors.danger },
     error: { color: colors.danger },
     announcementBody: { color: colors.text },
     acknowledgeButton: { backgroundColor: colors.accent },
@@ -236,7 +237,7 @@ export default function EventDetailScreen() {
   // why it's loaded via its own function called from useFocusEffect and
   // handleRefresh below instead of the event-field-keyed effect.
   const [taskAssignmentRows, setTaskAssignmentRows] = useState<
-    { taskId: string; taskName: string; assigneeNames: string }[] | null
+    { taskId: string; taskName: string; assigneeNames: string; refusedBy: string[] }[] | null
   >(null);
 
   const loadTaskAssignmentRows = useCallback(async (eventId: string) => {
@@ -251,6 +252,8 @@ export default function EventDetailScreen() {
         taskId: a.task_id,
         taskName: taskNameById.get(a.task_id) ?? "Unknown Task",
         assigneeNames: await resolveAssigneeNames(a.assignee as EventTargetSelector),
+        // FP-222-adj-1: names only; the server fills this for the owner/Admins.
+        refusedBy: (a.refused_by ?? []).map((r) => r.name),
       }))
     );
   }, []);
@@ -550,6 +553,15 @@ export default function EventDetailScreen() {
             <View key={row.taskId} style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, themed.fieldLabel]}>{row.taskName}</Text>
               <Text style={[styles.fieldValue, themed.fieldValue]}>{row.assigneeNames}</Text>
+              {row.refusedBy.length > 0 ? (
+                <Text
+                  style={[styles.fieldValue, styles.refusedLine, themed.refusedLine]}
+                  accessibilityLabel={`Refused by ${row.refusedBy.join(", ")}`}
+                  testID={`event-detail-task-refused-${row.taskId}`}
+                >
+                  Refused: {row.refusedBy.join(", ")}
+                </Text>
+              ) : null}
             </View>
           ))}
         </View>
@@ -1034,6 +1046,9 @@ const styles = StyleSheet.create({
   fieldValue: {
     fontSize: 15,
     color: "#333",
+  },
+  refusedLine: {
+    fontWeight: "700",
   },
   error: {
     color: "#c0392b",
