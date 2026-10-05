@@ -14,6 +14,7 @@ import { useSession } from "@/src/features/auth/hooks/useSession";
 import { SwipeableTabScreen } from "@/src/features/navigation/SwipeableTabScreen";
 import { listMeetingResources, listMyEvents } from "@/src/features/events/services/events.service";
 import { consumePendingEventsRefresh } from "@/src/features/events/eventListRefreshSignal";
+import { consumeViewedEventIds } from "@/src/features/events/eventViewedSignal";
 import { EventListItem } from "@/src/features/events/components/EventListItem";
 import { ensureNotificationSetup } from "@/src/features/notifications/services/notifications.service";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
@@ -22,7 +23,7 @@ import { reconcileAnnouncementReminders } from "@/src/features/notifications/ser
 import { reconcileConfirmationReminders } from "@/src/features/notifications/services/confirmationReminders.service";
 import { reconcileRsvpNudges } from "@/src/features/notifications/services/rsvpNudgeReminders.service";
 import { syncMyEventsBadge } from "@/src/features/notifications/hooks/useMyEventsBadgeCount";
-import { isRsvpWindowOpen } from "@/src/features/events/utils";
+import { applyViewedEvents, getEventsBadgeCount } from "@/src/features/events/utils";
 import type { MeetingResource, MyEvent } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -147,33 +148,16 @@ export default function MyEventsScreen() {
   const sectionListRef = useRef<SectionList<MyEvent, EventSection>>(null);
   const sections = useMemo(() => groupEventsByMonth(events), [events]);
 
-  // DIP-FP-165: derived locally from `events` (already fully in state, with
-  // rsvp_status/effective_status/rsvp_closure_at all present) rather than a
-  // separate fetch — a second query for this could disagree with what the
+  // DIP-FP-165: derived locally from `events` (already fully in state) rather
+  // than a separate fetch — a second query for this could disagree with what the
   // list itself is showing, even if only briefly, unlike Confirmations/
   // Self-Report/My Tasks, which have no local list to derive from and so
   // fetch their own pending-count independently.
-  // DIP-FP-191-mobile-adj-4: reverses adj-3's exclusion — a deliberate
-  // change of direction, not a bug fix. Announcements now contribute to
-  // this combined count via !acknowledged_at alone, with no
-  // isRsvpWindowOpen-style time gating (consistent with "acknowledging is
-  // never gated by time" from the original FP-191 story); every other
-  // event keeps its exact existing rsvp_status/isRsvpWindowOpen logic,
-  // untouched.
-  // DIP-FP-223-mobile-adj-1: an Admin or owning Leader can now see events
-  // they were never invited to (FP-223's widened visibility) — is_attendee
-  // false means exactly that, so those events must not contribute to the
-  // badge regardless of rsvp_status/isRsvpWindowOpen. Announcements are
-  // unaffected — is_attendee is an RSVP-targeting signal, not acknowledgment.
-  const pendingRsvpCount = useMemo(
-    () =>
-      events.filter((e) =>
-        e.event_type?.system_key === "ANNOUNCEMENT"
-          ? !e.acknowledged_at
-          : !e.rsvp_status && e.is_attendee && isRsvpWindowOpen(e)
-      ).length,
-    [events]
-  );
+  // FP-222-mobile: the rule itself (pending RSVPs + unacknowledged
+  // announcements, with every FP-191/FP-223 refinement) moved unchanged to
+  // getPendingRsvpCount in events/utils.ts; getEventsBadgeCount adds the number
+  // of events that need attention (server-decided: owner and Admins only).
+  const badgeCount = useMemo(() => getEventsBadgeCount(events), [events]);
 
   // Measured heights, keyed by event id (rows) and by section key (headers).
   // Headers are keyed per-section rather than sharing one ref because a
@@ -324,20 +308,28 @@ export default function MyEventsScreen() {
       if (fresh) {
         setEvents(fresh);
       }
+      // FP-222-mobile: events the member just opened (the detail screen recorded
+      // a view) lose their Recently Modified strip and "Changed:" labels right
+      // here, in memory — no network call, no pull-to-refresh. Applied after the
+      // refresh above so it also covers a list swapped in by that signal.
+      const viewed = consumeViewedEventIds();
+      if (viewed.length > 0) {
+        setEvents((prev) => applyViewedEvents(prev, viewed));
+      }
     }, [])
   );
 
-  // DIP-FP-165: keyed on pendingRsvpCount (derived from events, see above),
+  // DIP-FP-165: keyed on badgeCount (derived from events, see above),
   // not on focus — this fires whenever the underlying count could have
   // changed (initial load, pull-to-refresh, and the FP-151 signal above
   // alike), which is a strict superset of "on focus" and needs no fetch of
   // its own, unlike the other three tabs' badge-sync effects in
   // (tabs)/_layout.tsx.
   useEffect(() => {
-    syncMyEventsBadge(pendingRsvpCount).catch((err) => {
+    syncMyEventsBadge(badgeCount).catch((err) => {
       console.warn("Failed to sync My Events badge:", err);
     });
-  }, [pendingRsvpCount]);
+  }, [badgeCount]);
 
   const handlePressEvent = (event: MyEvent) => {
     router.push({

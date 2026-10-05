@@ -19,9 +19,12 @@ import {
   getEventRoster,
   listMeetingResources,
   listMyEvents,
+  recordEventView,
   submitRsvp,
 } from "@/src/features/events/services/events.service";
 import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSignal";
+import { notifyEventViewed } from "@/src/features/events/eventViewedSignal";
+import { EventIndicatorBanners } from "@/src/features/events/components/EventIndicatorBanners";
 import {
   acknowledgeAnnouncement,
   getAnnouncementRoster,
@@ -129,6 +132,18 @@ async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<st
 type ScreenEvent = MyEvent &
   Partial<Pick<EventDetail, "talk_id" | "created_by_member_id" | "owner_member_id" | "acknowledged_at">>;
 
+// FP-222-mobile: records that the member has now seen this event at `version`
+// (the version the screen just fetched) — fire-and-forget: a failure is logged
+// and never shown to the user (e.g. airplane mode), and the list is only told
+// the event was viewed once the server actually accepted it.
+function recordViewFireAndForget(eventId: string, version: number | undefined): void {
+  recordEventView(eventId, version)
+    .then(() => notifyEventViewed(eventId))
+    .catch((err) => {
+      console.warn("Failed to record event view:", err);
+    });
+}
+
 // DIP-FP-225-mobile: compared on local calendar-date parts (year/month/day),
 // not the raw ISO timestamps — two instants can fall on the same
 // timezone-local day despite differing ISO date substrings (or vice versa),
@@ -191,6 +206,18 @@ export default function EventDetailScreen() {
   const showRoster = role !== undefined && role !== "MEMBER";
 
   const [event, setEvent] = useState<ScreenEvent | null>(null);
+  // FP-222-mobile: the Recently Modified strip stays visible for the WHOLE visit.
+  // Each load records a view, so the next fetch (a refocus after Edit, a pull to
+  // refresh) comes back with is_modified false — latching the labels here keeps the
+  // strip on screen until the member leaves. null = not modified at any point in
+  // this visit. Needs Attention is deliberately NOT latched: viewing never changes
+  // it, so it simply follows the latest server data.
+  const [modifiedLabels, setModifiedLabels] = useState<string[] | null>(null);
+  useEffect(() => {
+    if (!event?.is_modified) return;
+    const next = event.modified_fields ?? [];
+    setModifiedLabels((prev) => (prev && prev.join("\u0000") === next.join("\u0000") ? prev : next));
+  }, [event?.is_modified, event?.modified_fields]);
   const [parseError, setParseError] = useState(false);
   const [myProfileId, setMyProfileId] = useState<string | null>(null);
   const [formationTalk, setFormationTalk] = useState<EventReminderFormation | null>(null);
@@ -292,6 +319,9 @@ export default function EventDetailScreen() {
           // getEventById actually compute and return it for real, so `fresh`
           // already carries the caller's authoritative value.
           setEvent((prev) => (prev ? { ...prev, ...fresh } : { ...fresh, rsvp_status: null, rsvp_reason: null }));
+          // FP-222-mobile: once per load, only after a SUCCESSFUL fetch. The flags
+          // in `fresh` above are the state before this view is recorded.
+          recordViewFireAndForget(params.id, fresh.version);
         })
         .catch((err) => {
           console.warn("Failed to fresh-fetch event:", err);
@@ -358,6 +388,7 @@ export default function EventDetailScreen() {
     try {
       const fresh = await getEventById(params.id);
       setEvent((prev) => (prev ? { ...prev, ...fresh } : prev));
+      recordViewFireAndForget(params.id, fresh.version);
     } catch (err) {
       console.warn("Failed to refresh event:", err);
     }
@@ -441,6 +472,18 @@ export default function EventDetailScreen() {
           </Pressable>
         ) : null}
       </View>
+
+      {/* FP-222-mobile: the same Needs Attention / Recently Modified strips as the
+          card, at the top of the screen content. They stay up for the whole visit
+          (see modifiedLabels above). */}
+      <EventIndicatorBanners
+        eventId={event.id}
+        variant="detail"
+        needsAttention={event.needs_attention}
+        needsAttentionTasks={event.needs_attention_tasks}
+        isModified={modifiedLabels !== null}
+        modifiedFields={modifiedLabels ?? []}
+      />
 
       <Text style={[styles.name, themed.name]}>{event.name}</Text>
       {event.event_type ? (

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { Megaphone } from "lucide-react-native";
 import { getMapUrl, getRsvpStatusColor, isRsvpWindowOpen } from "@/src/features/events/utils";
+import { EventIndicatorBanners } from "@/src/features/events/components/EventIndicatorBanners";
 import type { EffectiveEventStatus, MeetingResource, MyEvent, RsvpStatus } from "@/src/features/events/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -93,6 +94,21 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
       onPress={onPress}
       testID={`event-item-${event.id}`}
     >
+      {/* FP-222-mobile: full-width Needs Attention / Recently Modified strips at the
+          very top of the card, bleeding to its edges. Part of the card's Pressable,
+          so tapping a strip still opens the event. Renders nothing when neither
+          flag is set. */}
+      <EventIndicatorBanners
+        eventId={event.id}
+        variant="card"
+        needsAttention={event.needs_attention}
+        needsAttentionTasks={event.needs_attention_tasks}
+        isModified={event.is_modified}
+        modifiedFields={event.modified_fields}
+      />
+      {/* The card's normal content, unchanged, in its own View so the announcement
+          marker below stays positioned against the content (not the strips). */}
+      <View>
       {isAnnouncement ? (
         // DIP-FP-191-mobile-adj-4: full revert of adj-3's custom two-tone
         // SVG back to lucide's stock icon, at 2x the original 16 (32) —
@@ -180,6 +196,7 @@ export function EventListItem({ event, onPress, meetingResources }: EventListIte
           <Text style={[styles.rsvpText, themed.rsvpPromptText]}>Please RSVP now.</Text>
         ) : null}
       </View>
+      </View>
     </Pressable>
   );
 }
@@ -190,6 +207,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#f5f5f5",
     marginBottom: 12,
+    // FP-222-mobile: clips the bleeding banner strips to the card's rounded corners.
+    overflow: "hidden",
   },
   cancelled: {
     backgroundColor: "#fdecea",
@@ -237,9 +256,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#555",
   },
+  // FP-222-mobile: now positioned against the card's content View (which starts
+  // at the card's 16px padding edge) instead of the card itself, so it stays
+  // below any banner strips. -4 / -4 here is exactly the old 12 / 12 from the
+  // card's own edges (12 - 16 padding), i.e. no visual change without strips.
   announcementMarker: {
     position: "absolute",
-    top: 12,
-    right: 12,
+    top: -4,
+    right: -4,
   },
 });

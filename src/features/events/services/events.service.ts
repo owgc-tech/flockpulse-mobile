@@ -1,4 +1,5 @@
 import { apiFetch } from "@/src/lib/api";
+import { normalizeEventIndicators } from "@/src/features/events/utils";
 import type {
   CreatedEvent,
   CreateEventInput,
@@ -14,7 +15,10 @@ import type {
 } from "@/src/features/events/types";
 
 export async function listMyEvents(): Promise<MyEvent[]> {
-  return apiFetch<MyEvent[]>("/api/events/mine");
+  const events = await apiFetch<MyEvent[]>("/api/events/mine");
+  // FP-222-mobile: an older server omits the indicator fields — default them
+  // here, at the boundary, so no screen has to.
+  return events.map((e) => normalizeEventIndicators(e));
 }
 
 // GET /api/meeting-resources — the tracked Zoom accounts a Leader/Admin can
@@ -28,7 +32,31 @@ export async function listMeetingResources(): Promise<MeetingResource[]> {
 // scheduling time, which can go stale (edited/cancelled) by the time the
 // reminder actually fires. No role restriction server-side.
 export async function getEventById(eventId: string): Promise<EventDetail> {
-  return apiFetch<EventDetail>(`/api/events/${eventId}`);
+  return normalizeEventIndicators(await apiFetch<EventDetail>(`/api/events/${eventId}`));
+}
+
+// FP-222-mobile: records that this member has now seen the event (at `version`,
+// the version the screen just fetched), which is what clears "Recently
+// Modified" for them. Goes through apiFetch like every other call — no auth or
+// retry handling of its own; callers fire-and-forget it and only console.warn
+// on failure.
+//
+// apiFetch always parses a JSON envelope. The web endpoint (web part 1) answers
+// 204 with NO body, which makes response.json() throw a SyntaxError even though
+// the view WAS recorded; web adj-1 changes it to 200 { data: { version } }.
+// A SyntaxError here can only mean "success with an empty body" (a real failure
+// arrives as an ApiError with a code, or a network/timeout error), so it is
+// treated as success — which works against both server versions.
+export async function recordEventView(eventId: string, version?: number): Promise<void> {
+  try {
+    await apiFetch<unknown>(`/api/events/${eventId}/view`, {
+      method: "POST",
+      body: JSON.stringify({ version }),
+    });
+  } catch (err) {
+    if (err instanceof SyntaxError) return;
+    throw err;
+  }
 }
 
 // Callers can branch on err.code (RSVP_CLOSED / RSVP_REASON_REQUIRED /

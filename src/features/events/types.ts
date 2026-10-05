@@ -95,6 +95,22 @@ export interface MyEvent {
   // computes and returns it when callerMemberId is passed, which the route
   // handler's GET does).
   is_attendee: boolean;
+  // FP-222-mobile: the two event-card indicators, decided entirely by the
+  // server (web part 1 + adj-1). needs_attention is true only for the event's
+  // owner and Admins (a current assignee refused a task) and needs_attention_tasks
+  // names the refused tasks; is_modified is true when the event changed since
+  // this viewer last opened it (never for a first-time viewer, never for the
+  // person who made the change) and modified_fields are the human labels of
+  // what changed. Always present on anything returned by events.service.ts —
+  // normalizeEventIndicators (utils.ts) fills false/[] when an older server
+  // omits them, so no screen ever has to guard against undefined. (They are
+  // typed required here; the JSON a screen receives through route params or a
+  // notification payload can still predate them, which is why the banner
+  // component also defaults every prop.)
+  needs_attention: boolean;
+  needs_attention_tasks: string[];
+  is_modified: boolean;
+  modified_fields: string[];
 }
 
 // Matches flockpulse-web's EventDetailRow (GET /api/events/:id) — confirmed
@@ -128,6 +144,11 @@ export type EventDetail = Omit<MyEvent, "rsvp_status" | "rsvp_reason"> & {
   // is left in place for display/audit purposes, this is now the field
   // the canEdit permission gate reads.
   owner_member_id: string | null;
+  // FP-222-mobile: GET /api/events/:id has always returned events.version (it is in the
+  // route's select list) but this type never declared it — grounding correction:
+  // the DIP assumed EventDetail already carried it. The detail screen posts it back
+  // to POST /api/events/:id/view so the server records exactly the version just seen.
+  version: number;
 };
 
 // Matches flockpulse-web's RsvpResponse (POST /api/rsvps success body).

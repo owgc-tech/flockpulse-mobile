@@ -64,6 +64,100 @@ export function getRsvpStatusColor(colors: ThemeColors, status: RsvpStatus | nul
   }
 }
 
+// ---------------------------------------------------------------------------
+// FP-222-mobile: Needs Attention / Recently Modified indicators
+// ---------------------------------------------------------------------------
+
+export interface EventIndicatorFields {
+  needs_attention: boolean;
+  needs_attention_tasks: string[];
+  is_modified: boolean;
+  modified_fields: string[];
+}
+
+function toStringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim() !== "") : [];
+}
+
+// The boundary where server responses are read (events.service.ts): a server
+// that predates web part 1 / adj-1 simply omits these fields, and one that is
+// partway through (flags but no labels) omits the lists — treat every missing
+// or malformed value as "no indicator" so an older server never breaks a screen.
+export function normalizeEventIndicators<T extends object>(raw: T): T & EventIndicatorFields {
+  const r = raw as Partial<EventIndicatorFields>;
+  return {
+    ...raw,
+    needs_attention: r.needs_attention === true,
+    needs_attention_tasks: toStringList(r.needs_attention_tasks),
+    is_modified: r.is_modified === true,
+    modified_fields: toStringList(r.modified_fields),
+  };
+}
+
+// "Food Assignment refused" / "Food Assignment, Music refused" /
+// "Food Assignment, Music +1 more refused". No task names (the server did not
+// send any) -> no line at all; the strip then shows only its title.
+export function formatNeedsAttentionSummary(tasks: string[]): string | null {
+  if (tasks.length === 0) return null;
+  if (tasks.length <= 2) return `${tasks.join(", ")} refused`;
+  return `${tasks[0]}, ${tasks[1]} +${tasks.length - 2} more refused`;
+}
+
+// "Changed: Date & time, Location"; no labels -> no line.
+export function formatModifiedSummary(labels: string[]): string | null {
+  if (labels.length === 0) return null;
+  return `Changed: ${labels.join(", ")}`;
+}
+
+// Spoken forms ("&" is read as "and"; the visible strip keeps the ampersand).
+export function getNeedsAttentionA11yLabel(tasks: string[]): string {
+  const summary = formatNeedsAttentionSummary(tasks);
+  return summary ? `Needs attention: ${summary}` : "Needs attention";
+}
+
+export function getModifiedA11yLabel(labels: string[]): string {
+  const summary = formatModifiedSummary(labels);
+  return summary ? `Recently modified. ${summary.replace(/&/g, "and")}` : "Recently modified";
+}
+
+// DIP-FP-165 / FP-191-mobile-adj-4 / FP-223-mobile-adj-1, moved here from
+// (tabs)/index.tsx WITHOUT changing the rule. Derived locally from the list
+// already in state (rsvp_status / effective_status / rsvp_closure_at all
+// present) rather than a separate fetch, so it can never disagree with what the
+// list is showing. Announcements contribute via !acknowledged_at alone (no
+// isRsvpWindowOpen-style time gating — acknowledging is never gated by time);
+// every other event keeps its exact rsvp_status / isRsvpWindowOpen logic. An
+// Admin or owning Leader can see events they were never invited to (FP-223), so
+// is_attendee false means those events must not contribute regardless of
+// rsvp_status / isRsvpWindowOpen.
+export function getPendingRsvpCount(events: MyEvent[]): number {
+  return events.filter((e) =>
+    e.event_type?.system_key === "ANNOUNCEMENT"
+      ? !e.acknowledged_at
+      : !e.rsvp_status && e.is_attendee && isRsvpWindowOpen(e)
+  ).length;
+}
+
+// The Events tab badge: the existing pending RSVP / acknowledgement count plus
+// the number of events that need attention (decided by the server, and only ever
+// true for the event's owner and Admins).
+export function getEventsBadgeCount(events: MyEvent[]): number {
+  return getPendingRsvpCount(events) + events.filter((e) => e.needs_attention === true).length;
+}
+
+// Opening an event records a view; the list then drops that card's Recently
+// Modified strip locally (no network call). Needs Attention is never touched —
+// viewing does not resolve a refusal.
+export function applyViewedEvents(events: MyEvent[], viewedIds: string[]): MyEvent[] {
+  if (viewedIds.length === 0) return events;
+  const viewed = new Set(viewedIds);
+  return events.map((e) =>
+    viewed.has(e.id) && (e.is_modified || (e.modified_fields?.length ?? 0) > 0)
+      ? { ...e, is_modified: false, modified_fields: [] }
+      : e
+  );
+}
+
 // FP-219-mobile: mirrors web's validateLocationAddress (event.types.ts) so the
 // two clients reject the same input — a length cap plus a rejection of
 // obviously-junk input (blank, or one character repeated throughout, e.g.
