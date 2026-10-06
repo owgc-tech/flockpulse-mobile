@@ -37,7 +37,7 @@ import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/servic
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
 import { AnnouncementRosterList } from "@/src/features/events/components/AnnouncementRosterList";
-import { getMapUrl, isRsvpWindowOpen } from "@/src/features/events/utils";
+import { getMapUrl, isRsvpWindowOpen, shouldShowRoster } from "@/src/features/events/utils";
 import type {
   EventDetail,
   EventTargetSelector,
@@ -197,14 +197,13 @@ export default function EventDetailScreen() {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   // Every event here is one the viewer is personally an attendee of, so
-  // RSVP is always shown; roster is additionally shown to anyone who isn't
-  // a plain Member (Leader scoped to their own assigned members, Admin
-  // seeing everyone — both already enforced server-side). Guarded on role
-  // being known yet (not just "!== MEMBER") so it defaults to hidden while
-  // this screen's own useSession() call is still resolving, rather than
-  // briefly flashing true for a Member on first render.
+  // RSVP is always shown; FP-240: the roster is shown to every role (the
+  // server decides what each person may see — full list, decline reasons only
+  // for Admins/the decliner's leader/the person themself, removed members
+  // absent). Guarded on role being known yet (shouldShowRoster) so it defaults
+  // to hidden while this screen's own useSession() call is still resolving.
   const role = session?.user.app_metadata?.role;
-  const showRoster = role !== undefined && role !== "MEMBER";
+  const showRoster = shouldShowRoster(role);
 
   const [event, setEvent] = useState<ScreenEvent | null>(null);
   // FP-222-mobile: the Recently Modified strip stays visible for the WHOLE visit.
@@ -800,7 +799,16 @@ function RosterSection({
       {roster && roster.length > 0 ? <ResponseCountTable roster={roster} themed={themed} /> : null}
       <Text style={[styles.sectionTitle, themed.sectionTitle]}>Invitees</Text>
       {error ? (
-        <Text style={[styles.error, themed.error]}>{error}</Text>
+        <>
+          <Text style={[styles.error, themed.error]}>{error}</Text>
+          <Pressable
+            style={[styles.acknowledgeButton, styles.rosterRetryButton, themed.acknowledgeButton]}
+            onPress={loadRoster}
+            testID="roster-retry"
+          >
+            <Text style={styles.acknowledgeButtonText}>Try Again</Text>
+          </Pressable>
+        </>
       ) : !roster ? (
         <ActivityIndicator />
       ) : (
@@ -1065,6 +1073,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
     backgroundColor: "#2563eb",
+  },
+  rosterRetryButton: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 20,
+    marginTop: 12,
   },
   acknowledgeButtonText: {
     color: "#fff",

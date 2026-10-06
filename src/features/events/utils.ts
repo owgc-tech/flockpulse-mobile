@@ -296,3 +296,11 @@ export function formatTaskAssignmentFailures(failures: TaskAssignmentFailure[]):
     .map((f) => `${f.taskName}: ${f.message}`)
     .join("; ")}`;
 }
+
+// FP-240: every role that can open an event sees the RSVP roster; the server
+// decides what each person may see (decline reasons, removed members). Still
+// returns false until the role is known, so the section never flashes in for
+// a screen whose session is still resolving.
+export function shouldShowRoster(role: string | undefined): boolean {
+  return role !== undefined;
+}
