@@ -20,6 +20,20 @@ export const lightColors = {
   // is below 3.2, which is why these are not simply white in both themes.)
   onDanger: "#ffffff",
   onWarning: "#111111",
+  // FP-242: assignee state pills on the Event Detail (same colors as the web
+  // pills). Text on its own background, measured WCAG contrast (>= 4.5:1):
+  //   committed  light #14532d on #dcfce7 = 8.30  dark #bbf7d0 on #052e16 = 12.30
+  //   refused    light #7f1d1d on #fee2e2 = 8.20  dark #fecaca on #450a0a = 11.16
+  //   pending    light #27272a on #f4f4f5 = 13.55  dark #f4f4f5 on #27272a = 13.55
+  pillCommittedBg: "#dcfce7",
+  pillCommittedText: "#14532d",
+  pillCommittedBorder: "#86efac",
+  pillRefusedBg: "#fee2e2",
+  pillRefusedText: "#7f1d1d",
+  pillRefusedBorder: "#fca5a5",
+  pillPendingBg: "#f4f4f5",
+  pillPendingText: "#27272a",
+  pillPendingBorder: "#d4d4d8",
 };
 
 export const darkColors = {
@@ -37,6 +51,15 @@ export const darkColors = {
   warning: "#f59e0b",
   onDanger: "#000000",
   onWarning: "#000000",
+  pillCommittedBg: "#052e16",
+  pillCommittedText: "#bbf7d0",
+  pillCommittedBorder: "#166534",
+  pillRefusedBg: "#450a0a",
+  pillRefusedText: "#fecaca",
+  pillRefusedBorder: "#991b1b",
+  pillPendingBg: "#27272a",
+  pillPendingText: "#f4f4f5",
+  pillPendingBorder: "#3f3f46",
 };
 
 export type ThemeColors = typeof lightColors;

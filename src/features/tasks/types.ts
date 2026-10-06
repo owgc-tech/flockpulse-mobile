@@ -32,8 +32,25 @@ export interface EventTaskAssignment {
   // (empty for everyone else). Optional so an older server never breaks the
   // screen; listEventTaskAssignments normalizes it to an array.
   refused_by?: RefusedBy[];
+  // FP-242: one entry per resolved assignee, in the server's display order
+  // (direct members first, then each group in assignee.group_ids order), at
+  // most 100; assignee_states_total is the uncapped count. Filled only for the
+  // event's owner and Admins ([] / 0 for everyone else); optional so an older
+  // server never breaks the screen — listEventTaskAssignments normalizes both.
+  assignee_states?: AssigneeStateEntry[];
+  assignee_states_total?: number;
   created_at: string;
   updated_at: string;
+}
+
+// FP-242: matches flockpulse-web's AssigneeStateEntry.
+export type AssigneeState = "COMMITTED" | "REFUSED" | "PENDING";
+
+export interface AssigneeStateEntry {
+  member_id: string;
+  name: string;
+  state: AssigneeState;
+  via_group_id: string | null;
 }
 
 // FP-222-adj-1: matches flockpulse-web's RefusedBy.

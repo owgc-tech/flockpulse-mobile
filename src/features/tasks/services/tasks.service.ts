@@ -1,6 +1,8 @@
 import { apiFetch } from "@/src/lib/api";
 import type { EventTargetSelector } from "@/src/features/events/types";
 import type {
+  AssigneeState,
+  AssigneeStateEntry,
   EventTaskAssignment,
   MyTaskAssignment,
   RefusedBy,
@@ -23,7 +25,41 @@ export async function listMyTaskAssignments(): Promise<MyTaskAssignment[]> {
 // route handler's req.nextUrl.searchParams.get('event_id') (snake_case).
 export async function listEventTaskAssignments(eventId: string): Promise<EventTaskAssignment[]> {
   const rows = await apiFetch<EventTaskAssignment[]>(`/api/event-tasks-assignments?event_id=${eventId}`);
-  return rows.map((row) => ({ ...row, refused_by: normalizeRefusedBy(row.refused_by) }));
+  return rows.map((row) => {
+    const { states, total } = normalizeAssigneeStates(row.assignee_states, row.assignee_states_total);
+    return { ...row, refused_by: normalizeRefusedBy(row.refused_by), assignee_states: states, assignee_states_total: total };
+  });
+}
+
+const ASSIGNEE_STATES: readonly string[] = ["COMMITTED", "REFUSED", "PENDING"];
+
+// FP-242: boundary normalizer for assignee_states / assignee_states_total. A
+// non-array becomes []; entries that are not objects, have no non-empty name,
+// or have an unknown state are dropped; via_group_id becomes a string or null.
+// The server's order is kept (the screen must not re-sort). The total is
+// trusted only when it is a finite integer at least as large as the kept
+// list, otherwise the kept length is used.
+export function normalizeAssigneeStates(
+  states: unknown,
+  total: unknown
+): { states: AssigneeStateEntry[]; total: number } {
+  const kept: AssigneeStateEntry[] = [];
+  if (Array.isArray(states)) {
+    for (const entry of states) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const { member_id, name, state, via_group_id } = entry as Record<string, unknown>;
+      if (typeof name !== "string" || name.trim() === "") continue;
+      if (typeof state !== "string" || !ASSIGNEE_STATES.includes(state)) continue;
+      kept.push({
+        member_id: typeof member_id === "string" ? member_id : "",
+        name: name.trim(),
+        state: state as AssigneeState,
+        via_group_id: typeof via_group_id === "string" ? via_group_id : null,
+      });
+    }
+  }
+  const safeTotal = typeof total === "number" && Number.isInteger(total) && total >= kept.length ? total : kept.length;
+  return { states: kept, total: safeTotal };
 }
 
 // FP-222-adj-1: boundary normalizer — a missing, null or malformed refused_by
