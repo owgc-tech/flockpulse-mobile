@@ -36,6 +36,9 @@ import { fetchReminderContext } from "@/src/features/notifications/services/remi
 import { listEventTaskAssignments, listTasks } from "@/src/features/tasks/services/tasks.service";
 import { RsvpControls } from "@/src/features/events/components/RsvpControls";
 import { RosterList } from "@/src/features/events/components/RosterList";
+import { AssigneeStatePills } from "@/src/features/tasks/components/AssigneeStatePills";
+import { buildPillSections, shouldRenderPills } from "@/src/features/tasks/assigneePillSections";
+import type { PillSection } from "@/src/features/tasks/assigneePillSections";
 import { AnnouncementRosterList } from "@/src/features/events/components/AnnouncementRosterList";
 import { getMapUrl, isRsvpWindowOpen, shouldShowRoster } from "@/src/features/events/utils";
 import type {
@@ -121,6 +124,18 @@ async function resolveAssigneeNames(assignment: EventTargetSelector): Promise<st
     .map((row) => `${row.first_name} ${row.last_name}`);
 
   return [...groupNames, ...memberNames].join(", ");
+}
+
+// FP-242: group id -> name for the pill captions; same /api/groups?id= fetch
+// and Promise.allSettled pattern as resolveAssigneeNames (a bad id only drops
+// its own caption, which then reads "Unknown group").
+async function resolveGroupNames(groupIds: string[]): Promise<Map<string, string>> {
+  const settled = await Promise.allSettled(groupIds.map((id) => apiFetch<GroupLookupRow>(`/api/groups?id=${id}`)));
+  const names = new Map<string, string>();
+  settled.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value?.name) names.set(groupIds[i], r.value.name);
+  });
+  return names;
 }
 
 // This screen's local state needs both MyEvent's rsvp_status/rsvp_reason
@@ -236,7 +251,7 @@ export default function EventDetailScreen() {
   // why it's loaded via its own function called from useFocusEffect and
   // handleRefresh below instead of the event-field-keyed effect.
   const [taskAssignmentRows, setTaskAssignmentRows] = useState<
-    { taskId: string; taskName: string; assigneeNames: string; refusedBy: string[] }[] | null
+    { taskId: string; taskName: string; assigneeNames: string; refusedBy: string[]; pillSections: PillSection[] }[] | null
   >(null);
 
   const loadTaskAssignmentRows = useCallback(async (eventId: string) => {
@@ -246,6 +261,16 @@ export default function EventDetailScreen() {
       (a: EventTaskAssignment) =>
         a.assignee && ((a.assignee.group_ids?.length ?? 0) > 0 || (a.assignee.member_ids?.length ?? 0) > 0)
     );
+    // FP-242: group captions for the pill sections — each group id fetched
+    // once per load, only for rows the server sent states for (owner/Admins).
+    const pillGroupIds = [
+      ...new Set(
+        assigned
+          .filter((a: EventTaskAssignment) => (a.assignee_states ?? []).length > 0)
+          .flatMap((a: EventTaskAssignment) => a.assignee?.group_ids ?? [])
+      ),
+    ];
+    const groupNameById = await resolveGroupNames(pillGroupIds);
     return Promise.all(
       assigned.map(async (a: EventTaskAssignment) => ({
         taskId: a.task_id,
@@ -253,6 +278,14 @@ export default function EventDetailScreen() {
         assigneeNames: await resolveAssigneeNames(a.assignee as EventTargetSelector),
         // FP-222-adj-1: names only; the server fills this for the owner/Admins.
         refusedBy: (a.refused_by ?? []).map((r) => r.name),
+        // FP-242: empty (-> today's display) for non-managers, older servers
+        // and groups with no members right now.
+        pillSections: buildPillSections(
+          a.assignee_states ?? [],
+          a.assignee_states_total ?? 0,
+          a.assignee?.group_ids ?? [],
+          groupNameById
+        ),
       }))
     );
   }, []);
@@ -551,16 +584,22 @@ export default function EventDetailScreen() {
           {taskAssignmentRows.map((row) => (
             <View key={row.taskId} style={styles.fieldGroup}>
               <Text style={[styles.fieldLabel, themed.fieldLabel]}>{row.taskName}</Text>
-              <Text style={[styles.fieldValue, themed.fieldValue]}>{row.assigneeNames}</Text>
-              {row.refusedBy.length > 0 ? (
-                <Text
-                  style={[styles.fieldValue, styles.refusedLine, themed.refusedLine]}
-                  accessibilityLabel={`Refused by ${row.refusedBy.join(", ")}`}
-                  testID={`event-detail-task-refused-${row.taskId}`}
-                >
-                  Refused: {row.refusedBy.join(", ")}
-                </Text>
-              ) : null}
+              {shouldRenderPills(row.pillSections) ? (
+                <AssigneeStatePills sections={row.pillSections} testIDPrefix={`event-detail-task-${row.taskId}`} />
+              ) : (
+                <>
+                  <Text style={[styles.fieldValue, themed.fieldValue]}>{row.assigneeNames}</Text>
+                  {row.refusedBy.length > 0 ? (
+                    <Text
+                      style={[styles.fieldValue, styles.refusedLine, themed.refusedLine]}
+                      accessibilityLabel={`Refused by ${row.refusedBy.join(", ")}`}
+                      testID={`event-detail-task-refused-${row.taskId}`}
+                    >
+                      Refused: {row.refusedBy.join(", ")}
+                    </Text>
+                  ) : null}
+                </>
+              )}
             </View>
           ))}
         </View>
