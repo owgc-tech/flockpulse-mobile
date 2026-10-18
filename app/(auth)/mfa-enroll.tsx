@@ -37,6 +37,9 @@ export default function MfaEnrollScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const mountId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    console.log("[FP-218-investigate] mount start", mountId);
+
     (async () => {
       try {
         // A previous enrollment attempt may have been abandoned (app closed
@@ -45,15 +48,19 @@ export default function MfaEnrollScreen() {
         // enroll() call fails once one already exists. Reopening this
         // screen must always be able to start clean, so clear out any
         // unverified leftovers before enrolling.
+        console.log("[FP-218-investigate] before listAllTotpFactors", mountId);
         const existingFactors = await listAllTotpFactors();
         const unverifiedFactors = existingFactors.filter((factor) => factor.status === "unverified");
         for (const factor of unverifiedFactors) {
           await unenrollFactor(factor.id);
         }
 
+        console.log("[FP-218-investigate] before enrollTotpFactor", mountId);
         const enrollment = await enrollTotpFactor();
+        console.log("[FP-218-investigate] enrollTotpFactor succeeded", mountId);
         setEnrollment(enrollment);
       } catch (err) {
+        console.log("[FP-218-investigate] enrollTotpFactor failed", mountId, err);
         setError(err instanceof Error ? err.message : "Failed to start enrollment.");
       }
     })();
