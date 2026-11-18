@@ -5,19 +5,28 @@ updates:
     schedule:
       interval: "weekly"
     target-branch: "dev"
-    open-pull-requests-limit: 10
-    # DIP-FP-179-mobile: expo/expo-*/react-native must move together as one
-    # mutually-compatible SDK version set — Dependabot proposing them as
-    # separate PRs (as it did for react-native, expo, expo-router,
-    # expo-notifications, each individually) produces individually-broken
-    # PRs no one of which reflects a real, installable combination. Grouped
-    # so a future SDK bump arrives as one coordinated PR instead.
+    open-pull-requests-limit: 5
+    # FP-250: Expo SDK-pinned packages move only with an Expo SDK upgrade
+    # (a separate story). They must not produce Dependabot PRs at all, so they
+    # are ignored here. This replaces the FP-179 expo-ecosystem group, which
+    # only grouped these PRs instead of preventing them.
+    ignore:
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-community/*"
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
-      expo-ecosystem:
-        patterns:
-          - "expo"
-          - "expo-*"
-          - "react-native"
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
