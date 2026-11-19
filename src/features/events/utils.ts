@@ -1,8 +1,8 @@
 import { Linking, Platform } from "react-native";
 import type { MyEvent, RsvpStatus } from "@/src/features/events/types";
 import type { ThemeColors } from "@/src/theme/colors";
-import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
-import type { EventTaskAssignment } from "@/src/features/tasks/types";
+import { isAlwaysShown } from "@/src/features/tasks/alwaysShown";
+import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
 import type { TargetSelection } from "@/src/features/shared/components/MemberGroupPicker";
 
 // DIP-FP-147: prefer whatever's actually installed/preferred on-device
@@ -185,10 +185,11 @@ export function sameIds(a: string[], b: string[]): boolean {
   return sa.every((id, i) => id === sb[i]);
 }
 
-// FP-234: core tasks (Food Assignment, Prayer Leader, Music) are never
-// removable from an event, exactly like web.
-export function isRemovableTask(taskName: string): boolean {
-  return !CORE_TASK_NAMES.includes(taskName);
+// FP-234: always-shown tasks are never removable from an event, exactly like
+// web. FP-261: "always shown" now comes from the task's always_show flag
+// instead of a hardcoded name list.
+export function isRemovableTask(task: Task): boolean {
+  return !isAlwaysShown(task);
 }
 
 export interface TaskAssignmentOp {

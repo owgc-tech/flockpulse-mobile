@@ -26,7 +26,7 @@ import { notifyEventsRefreshed } from "@/src/features/events/eventListRefreshSig
 import { LOCATION_ADDRESS_MAX_LENGTH, validateLocationAddress } from "@/src/features/events/utils";
 import { listEventTypes } from "@/src/features/event-types/services/eventTypes.service";
 import { createEventTaskAssignment, listTasks } from "@/src/features/tasks/services/tasks.service";
-import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
+import { isAlwaysShown } from "@/src/features/tasks/alwaysShown";
 import type { Task } from "@/src/features/tasks/types";
 import { reconcileEventReminders } from "@/src/features/notifications/services/reminders.service";
 import { reconcileSelfReportReminders } from "@/src/features/notifications/services/selfReportReminders.service";
@@ -410,13 +410,13 @@ export default function CreateEventScreen() {
       });
   }, []);
 
-  const coreTasks = useMemo(() => tasks.filter((t) => CORE_TASK_NAMES.includes(t.name)), [tasks]);
+  const alwaysShownTasks = useMemo(() => tasks.filter((t) => isAlwaysShown(t)), [tasks]);
   const addedTasks = useMemo(() => tasks.filter((t) => addedTaskIds.includes(t.id)), [tasks, addedTaskIds]);
   const availableToAddTasks = useMemo(
-    () => tasks.filter((t) => !CORE_TASK_NAMES.includes(t.name) && !addedTaskIds.includes(t.id)),
+    () => tasks.filter((t) => !isAlwaysShown(t) && !addedTaskIds.includes(t.id)),
     [tasks, addedTaskIds]
   );
-  const displayedTasks = useMemo(() => [...coreTasks, ...addedTasks], [coreTasks, addedTasks]);
+  const displayedTasks = useMemo(() => [...alwaysShownTasks, ...addedTasks], [alwaysShownTasks, addedTasks]);
 
   const setTaskAssignment = (taskId: string, selection: TargetSelection) => {
     setTaskAssignments((prev) => ({ ...prev, [taskId]: selection }));
