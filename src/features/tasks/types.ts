@@ -11,6 +11,8 @@ export interface Task {
   // entirely (individuals only) — restores the constraint Prayer Leader had
   // before DIP-FP-161-3-task-wiring unified all tasks onto one picker.
   individual_only: boolean;
+  // FP-261: missing on older servers = false
+  always_show?: boolean;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
@@ -58,12 +60,6 @@ export interface RefusedBy {
   member_id: string;
   name: string;
 }
-
-// DIP-FP-161-3-task-wiring: the three tasks always shown on the Event
-// Form/Detail (matched by name), replacing the old dedicated Prayer
-// Leader/Food Assignment fields — not a schema concept, just this DIP's UI
-// convention, mirrored from web's EventForm.tsx.
-export const CORE_TASK_NAMES: readonly string[] = ["Prayer Leader", "Food Assignment", "Music"];
 
 // Matches flockpulse-web's MyTaskAssignmentRow (GET
 // /api/event-tasks-assignments/mine) exactly — reconciled against the real

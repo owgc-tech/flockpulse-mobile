@@ -34,7 +34,7 @@ import {
   listTasks,
   updateEventTaskAssignment,
 } from "@/src/features/tasks/services/tasks.service";
-import { CORE_TASK_NAMES } from "@/src/features/tasks/types";
+import { isAlwaysShown } from "@/src/features/tasks/alwaysShown";
 import type { EventTaskAssignment, Task } from "@/src/features/tasks/types";
 import {
   formationDisplayName,
@@ -482,7 +482,7 @@ export default function EditEventScreen() {
       });
   }, [params.id]);
 
-  const coreTasks = useMemo(() => tasks.filter((t) => CORE_TASK_NAMES.includes(t.name)), [tasks]);
+  const alwaysShownTasks = useMemo(() => tasks.filter((t) => isAlwaysShown(t)), [tasks]);
   // Non-core tasks that already have an assignment need their picker shown
   // immediately, same as the three core tasks always are — not something
   // the user has to "Add" back in.
@@ -490,8 +490,8 @@ export default function EditEventScreen() {
     () =>
       existingAssignments
         .map((a) => a.task_id)
-        .filter((id) => !coreTasks.some((t) => t.id === id) && !removedTaskIds.includes(id)),
-    [existingAssignments, coreTasks, removedTaskIds]
+        .filter((id) => !alwaysShownTasks.some((t) => t.id === id) && !removedTaskIds.includes(id)),
+    [existingAssignments, alwaysShownTasks, removedTaskIds]
   );
   const addedTasks = useMemo(
     () => tasks.filter((t) => addedTaskIds.includes(t.id) || preAssignedNonCoreTaskIds.includes(t.id)),
@@ -501,13 +501,13 @@ export default function EditEventScreen() {
     () =>
       tasks.filter(
         (t) =>
-          !CORE_TASK_NAMES.includes(t.name) &&
+          !isAlwaysShown(t) &&
           !addedTaskIds.includes(t.id) &&
           !preAssignedNonCoreTaskIds.includes(t.id)
       ),
     [tasks, addedTaskIds, preAssignedNonCoreTaskIds]
   );
-  const displayedTasks = useMemo(() => [...coreTasks, ...addedTasks], [coreTasks, addedTasks]);
+  const displayedTasks = useMemo(() => [...alwaysShownTasks, ...addedTasks], [alwaysShownTasks, addedTasks]);
 
   const initialAssignmentSelection = (taskId: string): TargetSelection => {
     const match = existingAssignments.find((a) => a.task_id === taskId);
@@ -982,7 +982,7 @@ export default function EditEventScreen() {
             onChange={(selection) => setTaskAssignment(task.id, selection)}
             individualOnly={task.individual_only}
           />
-          {isRemovableTask(task.name) ? (
+          {isRemovableTask(task) ? (
             <Pressable
               onPress={() => handleRemoveTask(task.id)}
               disabled={isSubmitting}
