@@ -159,7 +159,7 @@ function FormationTalkPicker({
     setError(null);
     listTalks(courseModule.id)
       .then(setTalks)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load talks."))
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load sessions."))
       .finally(() => setIsLoading(false));
   };
 
@@ -176,7 +176,7 @@ function FormationTalkPicker({
 
   return (
     <View>
-      <Text style={[styles.label, themed.label]}>Formation Talk (optional)</Text>
+      <Text style={[styles.label, themed.label]}>Training Session (optional)</Text>
       <Pressable style={[styles.input, themed.input]} onPress={openPicker} testID="formation-talk-open">
         <Text style={themed.inputText}>{talkLabel ?? "None"}</Text>
       </Pressable>
@@ -185,7 +185,7 @@ function FormationTalkPicker({
         <View style={[styles.modalContainer, themed.modalContainer]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, themed.modalTitle]}>
-              {step === "course" ? "Select Course" : step === "module" ? "Select Module" : "Select Talk"}
+              {step === "course" ? "Select Course" : step === "module" ? "Select Module" : "Select Session"}
             </Text>
             <Pressable onPress={() => setIsOpen(false)} testID="formation-talk-close">
               <Text style={[styles.doneText, themed.doneText]}>Cancel</Text>
@@ -426,7 +426,7 @@ export default function EditEventScreen() {
   // about what's known; opening the picker to actually change it always
   // produces an accurate label, same as create.tsx.
   const [talkLabel, setTalkLabel] = useState<string | undefined>(
-    initialEvent.talk_id ? "Talk selected (tap to change)" : undefined
+    initialEvent.talk_id ? "Session selected (tap to change)" : undefined
   );
   // DIP-FP-161-3-task-wiring: replaces the old dedicated prayerLeader/
   // foodAssignment state. tasks is the fetched catalog; existingAssignments

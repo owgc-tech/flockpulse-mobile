@@ -611,7 +611,7 @@ export default function EventDetailScreen() {
           section outright; undefined still renders it in a loading state. */}
       {event.talk_id !== null ? (
         <View style={styles.fieldGroup}>
-          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Formation Talk</Text>
+          <Text style={[styles.fieldLabel, themed.fieldLabel]}>Training Session</Text>
           {formationTalk ? (
             <>
               <Text style={[styles.fieldValue, themed.fieldValue]}>
