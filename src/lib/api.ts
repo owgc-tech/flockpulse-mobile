@@ -40,6 +40,9 @@ export class ApiError extends Error {
   assignedMemberCount: number | null;
   ownedGroupCount: number | null;
   ownedEventCount: number | null;
+  // FP-258: true when the caller is the community's only Administrator.
+  // False when the server doesn't send it (older server).
+  lastAdmin: boolean;
 
   constructor(
     code: string,
@@ -48,7 +51,8 @@ export class ApiError extends Error {
     conflict: MeetingResourceConflict | null = null,
     assignedMemberCount: number | null = null,
     ownedGroupCount: number | null = null,
-    ownedEventCount: number | null = null
+    ownedEventCount: number | null = null,
+    lastAdmin: boolean = false
   ) {
     super(message);
     this.code = code;
@@ -57,6 +61,7 @@ export class ApiError extends Error {
     this.assignedMemberCount = assignedMemberCount;
     this.ownedGroupCount = ownedGroupCount;
     this.ownedEventCount = ownedEventCount;
+    this.lastAdmin = lastAdmin;
   }
 }
 
@@ -69,6 +74,7 @@ interface ApiEnvelope<T> {
     assignedMemberCount?: number | null;
     ownedGroupCount?: number | null;
     ownedEventCount?: number | null;
+    lastAdmin?: boolean;
   };
 }
 
@@ -193,7 +199,16 @@ async function request<T>(path: string, init: RequestInit | undefined, isRetry: 
       throw timeoutError();
     }
 
-    throw new ApiError(code, message, response.status, conflict, assignedMemberCount, ownedGroupCount, ownedEventCount);
+    throw new ApiError(
+      code,
+      message,
+      response.status,
+      conflict,
+      assignedMemberCount,
+      ownedGroupCount,
+      ownedEventCount,
+      body.error?.lastAdmin === true
+    );
   }
 
   return body.data as T;
