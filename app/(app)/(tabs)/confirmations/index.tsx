@@ -166,8 +166,7 @@ function ConfirmationItem({
       {/* Note: the self-report's own decline reason isn't part of this
           endpoint's response (only rsvp_reason, a separate field) — nothing
           to show here for a No report beyond the status itself. */}
-      {attended && item.star_rating ? <Text style={[styles.meta, themed.meta]}>Rating: {item.star_rating}/5</Text> : null}
-      {attended && item.feedback ? <Text style={[styles.meta, themed.meta]}>{item.feedback}</Text> : null}
+      {/* FP-257: feedback is anonymous and never shown to Leaders. */}
 
       {error ? <Text style={[styles.error, themed.error]}>{error}</Text> : null}
 
