@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/src/lib/supabase";
 import { createClient } from "@supabase/supabase-js";
+import { defaultSessionKey, secureSessionStorage, sessionKeyFamily } from "@/src/lib/secureSessionStorage";
 import type { Factor } from "@supabase/supabase-js";
 import type { AuthenticatorAssuranceStatus, TotpEnrollment } from "@/src/features/auth/types";
 
@@ -152,13 +153,27 @@ export async function forceLocalSignOut(): Promise<void> {
     // fall through to the forced wipe
   }
 
+  // FP-255: the session now lives in SecureStore (chunked), with AsyncStorage
+  // only as a legacy/fallback copy, so the forced wipe has to reach both.
+  // SecureStore can't be enumerated, so its keys come from the AsyncStorage
+  // matches plus the client's default key for this project's URL.
+  let sessionKeys: string[] = [];
   try {
     const keys = await AsyncStorage.getAllKeys();
-    await AsyncStorage.multiRemove(
-      keys.filter((key) => /^sb-.+-auth-token(-user|-code-verifier)?$/.test(key))
-    );
+    sessionKeys = keys.filter((key) => /^sb-.+-auth-token(-user|-code-verifier)?$/.test(key));
+    await AsyncStorage.multiRemove(sessionKeys);
   } catch {
     // nothing more can be done locally; the second signOut below still tries
+  }
+
+  try {
+    const base = defaultSessionKey(process.env.EXPO_PUBLIC_SUPABASE_URL ?? "");
+    const all = new Set([...sessionKeys, ...(base ? sessionKeyFamily(base) : [])]);
+    for (const key of all) {
+      await secureSessionStorage.removeItem(key);
+    }
+  } catch {
+    // removeItem never throws on its own; this only guards the wiring
   }
 
   try {
