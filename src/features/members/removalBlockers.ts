@@ -27,6 +27,15 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+// FP-258-adj-1: closing line shown after the reasons.
+export const ACCOUNT_NOT_DELETED_LINE = "Your account was not deleted.";
+
+// Appends the closing line exactly once, and only when there are reasons.
+export function withNotDeletedLine(lines: string[]): string[] {
+  if (lines.length === 0 || lines.includes(ACCOUNT_NOT_DELETED_LINE)) return lines;
+  return [...lines, ACCOUNT_NOT_DELETED_LINE];
+}
+
 export function describeDeletionBlockers(err: DeletionBlockerSource): string[] {
   const lines: string[] = [];
 

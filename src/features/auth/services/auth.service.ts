@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/src/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import type { Factor } from "@supabase/supabase-js";
 import type { AuthenticatorAssuranceStatus, TotpEnrollment } from "@/src/features/auth/types";
 
@@ -15,6 +16,46 @@ export async function signInWithPassword(email: string, password: string) {
     throw new Error(GENERIC_LOGIN_ERROR);
   }
   return data;
+}
+
+// FP-258-adj-1: re-checks a password WITHOUT touching the signed-in session.
+// signInWithPassword() above runs on the shared client, so calling it while
+// already signed in replaces the current aal2 session with a brand-new aal1
+// one — the (app) gate then sees aal1 with nextLevel aal2 and redirects to
+// the two-step screen, unmounting whatever screen asked for the re-check
+// (Delete My Account lost its 409 reasons that way). This uses a throwaway
+// client instead: nothing persisted, no auto-refresh, its own storage key and
+// no AsyncStorage, so the shared client and its stored session are never read
+// or written. The throwaway session is ended with scope "local" on THAT
+// client only — the default scope is "global", which would revoke the
+// person's sessions on every device. Same error as login on any failure.
+export async function verifyPassword(email: string, password: string): Promise<void> {
+  const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) {
+    throw new Error(GENERIC_LOGIN_ERROR);
+  }
+
+  const checker = createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storageKey: "fp-password-check",
+    },
+  });
+
+  const { error } = await checker.auth.signInWithPassword({ email, password });
+  if (error) {
+    throw new Error(GENERIC_LOGIN_ERROR);
+  }
+
+  try {
+    await checker.auth.signOut({ scope: "local" });
+  } catch {
+    // best effort: the throwaway session lives only in this client's memory
+    // and the client is discarded either way
+  }
 }
 
 export async function getAssuranceLevel(): Promise<AuthenticatorAssuranceStatus> {
