@@ -8,36 +8,16 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
 import { signInWithPassword, signOut } from "@/src/features/auth/services/auth.service";
 import { deleteOwnAccount } from "@/src/features/members/services/myProfile.service";
+import { describeDeletionBlockers } from "@/src/features/members/removalBlockers";
 import { ApiError } from "@/src/lib/api";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
-
-// FP-187-mobile: builds first-person, count-specific copy from whichever of
-// the three ApiError fields is set (INVALID_STATE_TRANSITION always sets
-// exactly one — confirmed live against the route handler). Deliberately not
-// the raw err.message: the DB trigger's text includes the member's raw UUID
-// and reads as "Cannot deactivate member <uuid>: ..." — accurate but not
-// fit for display to the person who just tapped a delete button.
-function describeStateTransitionError(err: ApiError): string {
-  if (err.ownedEventCount !== null) {
-    const n = err.ownedEventCount;
-    return `You still own ${n} event${n === 1 ? "" : "s"} — transfer ownership before deleting your account.`;
-  }
-  if (err.ownedGroupCount !== null) {
-    const n = err.ownedGroupCount;
-    return `You still own ${n} group${n === 1 ? "" : "s"} — transfer ownership before deleting your account.`;
-  }
-  if (err.assignedMemberCount !== null) {
-    const n = err.assignedMemberCount;
-    return `${n} member${n === 1 ? " is" : "s are"} still assigned to you as Assigned Leader — reassign them before deleting your account.`;
-  }
-  return err.message;
-}
 
 // Only the color-bearing keys from `styles` below, recomputed from the
 // current theme at render time — everything structural stays in the static
@@ -61,10 +41,13 @@ export default function DeleteAccountScreen() {
   const { session } = useSession();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // FP-258: every reason the server says deletion is blocked, one sentence each.
+  const [blockers, setBlockers] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     setError(null);
+    setBlockers([]);
 
     const email = session?.user.email;
     if (!email) {
@@ -84,7 +67,7 @@ export default function DeleteAccountScreen() {
         await deleteOwnAccount();
       } catch (err) {
         if (err instanceof ApiError && err.code === "INVALID_STATE_TRANSITION") {
-          setError(describeStateTransitionError(err));
+          setBlockers(describeDeletionBlockers(err));
           return;
         }
         if (err instanceof ApiError && err.code === "AUTH_DELETE_FAILED") {
@@ -133,6 +116,17 @@ export default function DeleteAccountScreen() {
         placeholderTextColor={colors.textMuted}
         testID="delete-account-password"
       />
+
+      {blockers.length > 0 ? (
+        <View accessible accessibilityLabel={blockers.join(" ")} style={styles.blockers} testID="delete-account-blockers">
+          {blockers.map((line) => (
+            <View key={line} style={styles.blockerRow}>
+              <Text style={[styles.blockerBullet, themed.error]}>{"•"}</Text>
+              <Text style={[styles.blockerText, themed.error]}>{line}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {error ? (
         <Text style={[styles.error, themed.error]} testID="delete-account-error">
@@ -214,6 +208,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  blockers: {
+    marginTop: 16,
+    gap: 8,
+  },
+  blockerRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  blockerBullet: {
+    color: "#c0392b",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  blockerText: {
+    flex: 1,
+    color: "#c0392b",
+    fontSize: 14,
+    lineHeight: 20,
   },
   error: {
     color: "#c0392b",
