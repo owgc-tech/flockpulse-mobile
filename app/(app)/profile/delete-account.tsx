@@ -12,9 +12,9 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 import { useSession } from "@/src/features/auth/hooks/useSession";
-import { signInWithPassword, signOut } from "@/src/features/auth/services/auth.service";
+import { signOut, verifyPassword } from "@/src/features/auth/services/auth.service";
 import { deleteOwnAccount } from "@/src/features/members/services/myProfile.service";
-import { describeDeletionBlockers } from "@/src/features/members/removalBlockers";
+import { describeDeletionBlockers, withNotDeletedLine } from "@/src/features/members/removalBlockers";
 import { ApiError } from "@/src/lib/api";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
@@ -61,13 +61,13 @@ export default function DeleteAccountScreen() {
       // login — a failure here throws a generic "Incorrect email or
       // password." message (see auth.service.ts) and the deletion call
       // below is never reached.
-      await signInWithPassword(email, password);
+      await verifyPassword(email, password);
 
       try {
         await deleteOwnAccount();
       } catch (err) {
         if (err instanceof ApiError && err.code === "INVALID_STATE_TRANSITION") {
-          setBlockers(describeDeletionBlockers(err));
+          setBlockers(withNotDeletedLine(describeDeletionBlockers(err)));
           return;
         }
         if (err instanceof ApiError && err.code === "AUTH_DELETE_FAILED") {
