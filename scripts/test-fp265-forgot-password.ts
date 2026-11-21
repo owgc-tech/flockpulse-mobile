@@ -30,11 +30,11 @@ function check(label: string, ok: boolean) {
 }
 
 console.log("getResetPasswordUrl");
-check("https base", getResetPasswordUrl("https://app.flockpulse.ca") === "https://app.flockpulse.ca/reset-password");
-check("trailing slash", getResetPasswordUrl("https://app.flockpulse.ca/") === "https://app.flockpulse.ca/reset-password");
-check("base with a path", getResetPasswordUrl("https://x.test/api") === "https://x.test/reset-password");
-check("surrounding whitespace", getResetPasswordUrl("  https://x.test  ") === "https://x.test/reset-password");
-check("http localhost with port", getResetPasswordUrl("http://localhost:3000") === "http://localhost:3000/reset-password");
+check("https base", getResetPasswordUrl("https://app.flockpulse.ca") === "https://app.flockpulse.ca/reset-password?from=app");
+check("trailing slash", getResetPasswordUrl("https://app.flockpulse.ca/") === "https://app.flockpulse.ca/reset-password?from=app");
+check("base with a path", getResetPasswordUrl("https://x.test/api") === "https://x.test/reset-password?from=app");
+check("surrounding whitespace", getResetPasswordUrl("  https://x.test  ") === "https://x.test/reset-password?from=app");
+check("http localhost with port", getResetPasswordUrl("http://localhost:3000") === "http://localhost:3000/reset-password?from=app");
 check("undefined -> null", getResetPasswordUrl(undefined) === null);
 check("null -> null", getResetPasswordUrl(null) === null);
 check("empty string -> null", getResetPasswordUrl("") === null);
