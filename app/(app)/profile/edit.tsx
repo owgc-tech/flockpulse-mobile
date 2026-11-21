@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { router } from "expo-router";
-import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { fetchMyProfile, updateMyProfile } from "@/src/features/members/services/myProfile.service";
 import type { Gender, MaritalStatus, MemberGroup } from "@/src/features/members/types";
 import { UnavailabilitySection } from "@/src/features/profile/components/UnavailabilitySection";
@@ -33,10 +32,6 @@ const MARITAL_STATUS_OPTIONS: { value: MaritalStatus; label: string }[] = [
   { value: "SEPARATED", label: "Separated" },
 ];
 
-function toDateOnlyString(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 // Only the color-bearing keys from `styles` below, recomputed from the
 // current theme at render time — everything structural stays in the static
 // StyleSheet.create() untouched. Merged on top via style arrays.
@@ -47,7 +42,6 @@ function getThemedStyles(colors: ThemeColors) {
     backLinkText: { color: colors.accent },
     label: { color: colors.text },
     input: { borderColor: colors.border, color: colors.text },
-    inputText: { color: colors.text },
     optionButton: { backgroundColor: colors.backgroundSecondary },
     optionButtonSelected: { backgroundColor: colors.accent },
     optionText: { color: colors.text },
@@ -72,8 +66,6 @@ export default function EditProfileScreen() {
   const [lastName, setLastName] = useState("");
   const [gender, setGender] = useState<Gender | null>(null);
   const [maritalStatus, setMaritalStatus] = useState<MaritalStatus | null>(null);
-  const [birthdate, setBirthdate] = useState<Date | null>(null);
-  const [showIosDatePicker, setShowIosDatePicker] = useState(false);
   const [groups, setGroups] = useState<MemberGroup[]>([]);
 
   const load = useCallback(async () => {
@@ -84,7 +76,6 @@ export default function EditProfileScreen() {
       setLastName(profile.last_name);
       setGender(profile.gender);
       setMaritalStatus(profile.marital_status);
-      setBirthdate(profile.birthdate ? new Date(profile.birthdate) : null);
       setGroups(profile.groups);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile.");
@@ -97,24 +88,6 @@ export default function EditProfileScreen() {
     load();
   }, [load]);
 
-  const handlePressBirthdate = () => {
-    const value = birthdate ?? new Date();
-    if (Platform.OS === "android") {
-      DateTimePickerAndroid.open({
-        value,
-        mode: "date",
-        maximumDate: new Date(),
-        onChange: (event, selectedDate) => {
-          if (event.type === "set" && selectedDate) {
-            setBirthdate(selectedDate);
-          }
-        },
-      });
-    } else {
-      setShowIosDatePicker(true);
-    }
-  };
-
   const handleSubmit = async () => {
     setError(null);
     setIsSubmitting(true);
@@ -124,7 +97,6 @@ export default function EditProfileScreen() {
         lastName: lastName.trim(),
         ...(gender ? { gender } : {}),
         ...(maritalStatus ? { maritalStatus } : {}),
-        ...(birthdate ? { birthdate: toDateOnlyString(birthdate) } : {}),
       });
       router.back();
     } catch (err) {
@@ -215,31 +187,6 @@ export default function EditProfileScreen() {
           </Pressable>
         ))}
       </View>
-
-      <Text style={[styles.label, themed.label]}>Birthdate</Text>
-      <Pressable
-        style={[styles.input, themed.input]}
-        onPress={handlePressBirthdate}
-        disabled={isSubmitting}
-        testID="edit-birthdate"
-      >
-        <Text style={themed.inputText}>{birthdate ? birthdate.toLocaleDateString() : "Select birthdate"}</Text>
-      </Pressable>
-      {Platform.OS === "ios" && showIosDatePicker ? (
-        <DateTimePicker
-          value={birthdate ?? new Date()}
-          mode="date"
-          display="inline"
-          themeVariant="light"
-          maximumDate={new Date()}
-          onChange={(event, selectedDate) => {
-            setShowIosDatePicker(false);
-            if (event.type === "set" && selectedDate) {
-              setBirthdate(selectedDate);
-            }
-          }}
-        />
-      ) : null}
 
       <Text style={[styles.label, themed.label]}>Groups</Text>
       {groups.length > 0 ? (

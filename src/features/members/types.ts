@@ -18,7 +18,6 @@ export interface MyProfile {
   email: string;
   gender: Gender | null;
   marital_status: MaritalStatus | null;
-  birthdate: string | null;
   // DIP-FP-192-mobile: confirmed live against getMyProfile() — role and
   // role_catalog_entry_id are the raw selected columns, role_display_name
   // is resolved server-side from them (FP-192-web's role catalog). None of
@@ -47,5 +46,4 @@ export interface UpdateMyProfileInput {
   lastName?: string;
   gender?: Gender;
   maritalStatus?: MaritalStatus;
-  birthdate?: string;
 }
