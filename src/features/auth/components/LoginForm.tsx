@@ -1,7 +1,16 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useThemeColors } from "@/src/theme/useThemeColors";
 import type { ThemeColors } from "@/src/theme/colors";
+import { FORGOT_PASSWORD_FALLBACK_MESSAGE, getResetPasswordUrl } from "../forgotPassword";
 
 interface LoginFormProps {
   onSubmit: (email: string, password: string) => Promise<void>;
@@ -16,6 +25,7 @@ function getThemedStyles(colors: ThemeColors) {
     input: { borderColor: colors.border, color: colors.text },
     error: { color: colors.danger },
     button: { backgroundColor: colors.accent },
+    forgotText: { color: colors.accent },
   });
 }
 
@@ -36,6 +46,21 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // FP-265: opens the web reset page in the phone's browser. Never shows a raw error.
+  const handleForgotPassword = async () => {
+    setError(null);
+    const url = getResetPasswordUrl(process.env.EXPO_PUBLIC_API_BASE_URL);
+    if (!url) {
+      setError(FORGOT_PASSWORD_FALLBACK_MESSAGE);
+      return;
+    }
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setError(FORGOT_PASSWORD_FALLBACK_MESSAGE);
     }
   };
 
@@ -84,6 +109,17 @@ export function LoginForm({ onSubmit }: LoginFormProps) {
           <Text style={styles.buttonText}>Sign In</Text>
         )}
       </Pressable>
+
+      <Pressable
+        style={styles.forgotLink}
+        onPress={handleForgotPassword}
+        disabled={isSubmitting}
+        accessibilityRole="link"
+        accessibilityLabel="Forgot password? Opens the reset page in your browser"
+        testID="login-forgot-password"
+      >
+        <Text style={[styles.forgotText, themed.forgotText]}>Forgot password?</Text>
+      </Pressable>
     </View>
   );
 }
@@ -123,6 +159,16 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  forgotLink: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  forgotText: {
+    fontSize: 14,
     fontWeight: "600",
   },
 });
