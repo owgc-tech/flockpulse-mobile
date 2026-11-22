@@ -11,6 +11,8 @@ import {
   isBiometricHardwareAvailable,
   isDeviceTrusted,
 } from "@/src/features/auth/services/biometricTrust.service";
+import { AcceptanceScreen } from "@/src/features/legal/components/AcceptanceScreen";
+import { fetchAcceptanceRequired } from "@/src/features/legal/acceptance.service";
 import { CommunityBanner } from "@/src/features/tenant/components/CommunityBanner";
 import {
   consumePendingNotificationResponse,
@@ -97,6 +99,10 @@ export default function AppLayout() {
   // re-running the trust/hardware/biometric checks; cleared on sign-out so
   // a genuine new sign-in always re-checks.
   const readyUserIdRef = useRef<string | null>(null);
+  // FP-254: result of the one-time Terms/Privacy acceptance check, tagged
+  // with the user it was made for. Checked once per app session per user
+  // (a token refresh keeps the same user id, so it never re-runs).
+  const [acceptance, setAcceptance] = useState<{ userId: string; status: "required" | "clear" } | null>(null);
 
   useEffect(() => {
     if (isLoading) {
@@ -199,6 +205,24 @@ export default function AppLayout() {
     return subscribeToPendingNotification(drain);
   }, [gate.phase]);
 
+  // FP-254: once the gate is "ready" (after MFA and biometric), ask the server
+  // whether this member still has to accept the Terms/Privacy Policy. The
+  // service never throws (older server or a network problem means "not
+  // required"), so a failed check can never lock anyone out.
+  const readyUserId = gate.phase === "ready" ? (session?.user.id ?? null) : null;
+  useEffect(() => {
+    if (!readyUserId) return;
+    if (acceptance?.userId === readyUserId) return;
+    let cancelled = false;
+    fetchAcceptanceRequired().then((required) => {
+      if (!cancelled) setAcceptance({ userId: readyUserId, status: required ? "required" : "clear" });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyUserId]);
+
   if (gate.phase === "loading") {
     return (
       <View style={[styles.center, themed.center]}>
@@ -231,6 +255,21 @@ export default function AppLayout() {
         }}
       />
     );
+  }
+
+  // FP-254: keep the existing loading state while the acceptance check is in
+  // flight, then show the one-time screen instead of the app if required.
+  // Client-side gate only; the server does not block API calls.
+  if (!readyUserId || acceptance?.userId !== readyUserId) {
+    return (
+      <View style={[styles.center, themed.center]}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (acceptance.status === "required") {
+    return <AcceptanceScreen onAccepted={() => setAcceptance({ userId: readyUserId, status: "clear" })} />;
   }
 
   // A Stack wrapping the (tabs) group (My Events / Confirmations) plus
