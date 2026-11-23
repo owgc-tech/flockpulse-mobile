@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { MfaEnrollForm } from "@/src/features/auth/components/MfaEnrollForm";
 import {
@@ -13,6 +22,12 @@ import {
   markDeviceTrusted,
   markJustAuthenticated,
 } from "@/src/features/auth/services/biometricTrust.service";
+import {
+  startEnrollment,
+  startOverEnrollment,
+  type EnrollFlowDeps,
+} from "@/src/features/auth/services/mfaEnrollFlow";
+import { clearPendingEnrollment, realPendingStore } from "@/src/features/auth/services/pendingEnrollment";
 import { supabase } from "@/src/lib/supabase";
 import type { TotpEnrollment } from "@/src/features/auth/types";
 import { useThemeColors } from "@/src/theme/useThemeColors";
@@ -27,41 +42,66 @@ function getThemedStyles(colors: ThemeColors) {
     center: { backgroundColor: colors.background },
     title: { color: colors.text },
     error: { color: colors.danger },
+    button: { backgroundColor: colors.accent },
   });
 }
+
+// FP-218: never show Supabase's raw error text.
+const START_FAILED_MESSAGE = "We could not start two-step setup. Please try again.";
+
+// Real dependencies for the start-up flow (the logic lives in mfaEnrollFlow.ts).
+const enrollDeps: EnrollFlowDeps = {
+  getUserId: async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user.id ?? null;
+  },
+  listAllTotp: listAllTotpFactors,
+  unenroll: unenrollFactor,
+  enroll: enrollTotpFactor,
+  pending: realPendingStore,
+};
 
 export default function MfaEnrollScreen() {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [enrollment, setEnrollment] = useState<TotpEnrollment | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const mountedRef = useRef(true);
+
+  // FP-218: starts (or restores) the setup. A reload or a return from the
+  // authenticator app shows the same key; leftover unfinished factors are
+  // cleaned up; two copies of this screen starting at once share one run.
+  const start = useCallback(async () => {
+    setFailed(false);
+    setEnrollment(null);
+    try {
+      const result = await startEnrollment(enrollDeps);
+      if (mountedRef.current) setEnrollment(result);
+    } catch {
+      if (mountedRef.current) setFailed(true);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        // A previous enrollment attempt may have been abandoned (app closed
-        // before verifying) — Supabase creates an unverified factor
-        // server-side the moment enroll() is first called, and a fresh
-        // enroll() call fails once one already exists. Reopening this
-        // screen must always be able to start clean, so clear out any
-        // unverified leftovers before enrolling.
-        const existingFactors = await listAllTotpFactors();
-        const unverifiedFactors = existingFactors.filter((factor) => factor.status === "unverified");
-        for (const factor of unverifiedFactors) {
-          await unenrollFactor(factor.id);
-        }
+    mountedRef.current = true;
+    start();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [start]);
 
-        const enrollment = await enrollTotpFactor();
-        setEnrollment(enrollment);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to start enrollment.");
-      }
-    })();
-  }, []);
+  const handleStartOver = async () => {
+    const result = await startOverEnrollment(enrollDeps);
+    if (mountedRef.current) setEnrollment(result);
+  };
 
   const handleVerify = async (code: string) => {
     if (!enrollment) return;
     await verifyTotpEnrollment(enrollment.factorId, code);
+    // The setup is finished: the remembered key is no longer needed.
+    await clearPendingEnrollment();
 
     // FP-92 item 15: on first successful aal2 login, offer trusted-device
     // biometric unlock if the hardware supports it.
@@ -79,10 +119,21 @@ export default function MfaEnrollScreen() {
     router.replace("/(app)");
   };
 
-  if (error) {
+  if (failed) {
     return (
       <View style={[styles.center, themed.center]}>
-        <Text style={[styles.error, themed.error]}>{error}</Text>
+        <Text style={[styles.error, themed.error]} testID="mfa-enroll-start-error">
+          {START_FAILED_MESSAGE}
+        </Text>
+        <Pressable
+          style={[styles.retryButton, themed.button]}
+          onPress={start}
+          accessibilityRole="button"
+          accessibilityLabel="Try again to start two-step setup"
+          testID="mfa-enroll-retry"
+        >
+          <Text style={styles.retryButtonText}>Try again</Text>
+        </Pressable>
       </View>
     );
   }
@@ -99,7 +150,12 @@ export default function MfaEnrollScreen() {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
     <ScrollView contentContainerStyle={[styles.container, themed.container]}>
       <Text style={[styles.title, themed.title]}>Set Up Two-Factor Authentication</Text>
-      <MfaEnrollForm enrollment={enrollment} onVerify={handleVerify} />
+      <MfaEnrollForm
+        key={enrollment.factorId}
+        enrollment={enrollment}
+        onVerify={handleVerify}
+        onStartOver={handleStartOver}
+      />
     </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -133,5 +189,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: "center",
     paddingHorizontal: 24,
+  },
+  retryButton: {
+    backgroundColor: "#2563eb",
+    borderRadius: 8,
+    minHeight: 44,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 24,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

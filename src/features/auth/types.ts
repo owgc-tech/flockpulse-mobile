@@ -14,7 +14,10 @@ export interface EnrolledTotpFactor {
 
 export interface TotpEnrollment {
   factorId: string;
-  qrCode: string;
+  // FP-218: absent when the setup was restored after a reload (the QR image
+  // is not stored; the manual key is).
+  qrCode?: string;
   secret: string;
   uri: string;
+  restored?: boolean;
 }
