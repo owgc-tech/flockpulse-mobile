@@ -4,6 +4,21 @@ import { createClient } from "@supabase/supabase-js";
 import { defaultSessionKey, secureSessionStorage, sessionKeyFamily } from "@/src/lib/secureSessionStorage";
 import type { Factor } from "@supabase/supabase-js";
 import type { AuthenticatorAssuranceStatus, TotpEnrollment } from "@/src/features/auth/types";
+import { clearPendingEnrollment } from "@/src/features/auth/services/pendingEnrollment";
+
+// FP-218: pure helper, defined next to the enrolment flow so scripts can test
+// it without loading the Supabase client.
+export { selectUnverifiedTotp } from "@/src/features/auth/services/mfaEnrollFlow";
+
+// FP-218: dropping the pending two-step setup on sign-out must never throw or
+// block signing out.
+async function clearPendingSafely(): Promise<void> {
+  try {
+    await clearPendingEnrollment();
+  } catch {
+    // never block sign-out
+  }
+}
 
 // Supabase's signInWithPassword error does not distinguish between "no such
 // email" and "wrong password" — surface its message as-is rather than
@@ -74,11 +89,18 @@ export async function hasEnrolledTotpFactor(): Promise<boolean> {
 // Unlike hasEnrolledTotpFactor()/getTotpFactorId() (verified-only), this
 // returns every TOTP factor regardless of status — needed to find and clean
 // up unverified leftovers from an abandoned enrollment attempt before
-// enrolling fresh (see mfa-enroll.tsx).
+// enrolling fresh (see mfaEnrollFlow.ts).
+//
+// FP-218: this used to return `data.totp`, and the old comment claimed that
+// was "every status". It is not: the installed @supabase/auth-js (2.119.0,
+// GoTrueClient._listFactors) puts every factor in `data.all` but only pushes
+// a factor into `data.totp` when its status is "verified". So the cleanup
+// never found (or removed) an unverified leftover. `data.all` is the complete
+// list.
 export async function listAllTotpFactors(): Promise<Factor[]> {
   const { data, error } = await supabase.auth.mfa.listFactors();
   if (error) throw error;
-  return data.totp;
+  return data.all.filter((factor) => factor.factor_type === "totp");
 }
 
 export async function unenrollFactor(factorId: string): Promise<void> {
@@ -87,7 +109,13 @@ export async function unenrollFactor(factorId: string): Promise<void> {
 }
 
 export async function enrollTotpFactor(): Promise<TotpEnrollment> {
-  const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+  // FP-218: a unique friendly name per attempt. Without one every attempt had
+  // the same empty name, so a leftover factor made the next enroll() fail with
+  // `A factor with the friendly name "" for this user already exists`.
+  const { data, error } = await supabase.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName: `FlockPulse ${new Date().toISOString()}`,
+  });
   if (error) throw error;
   return {
     factorId: data.id,
@@ -129,6 +157,7 @@ export async function requestPasswordReset(email: string, redirectTo?: string) {
 }
 
 export async function signOut() {
+  await clearPendingSafely();
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
@@ -146,6 +175,7 @@ export async function signOut() {
 // session and emits SIGNED_OUT, which is what sends the gate to login and
 // lets useSession clear the trusted-device flag.
 export async function forceLocalSignOut(): Promise<void> {
+  await clearPendingSafely();
   try {
     const { error } = await supabase.auth.signOut();
     if (!error) return;

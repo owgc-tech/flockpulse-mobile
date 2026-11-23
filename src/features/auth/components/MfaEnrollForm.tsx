@@ -8,6 +8,8 @@ import type { ThemeColors } from "@/src/theme/colors";
 interface MfaEnrollFormProps {
   enrollment: TotpEnrollment;
   onVerify: (code: string) => Promise<void>;
+  // FP-218: replaces a restored setup with a brand-new key and QR code.
+  onStartOver?: () => Promise<void>;
 }
 
 // Only the color-bearing keys from `styles` below, recomputed from the
@@ -26,6 +28,8 @@ function getThemedStyles(colors: ThemeColors) {
     input: { borderColor: colors.border, color: colors.text },
     error: { color: colors.danger },
     button: { backgroundColor: colors.accent },
+    restoredNote: { color: colors.text },
+    startOverText: { color: colors.accent },
   });
 }
 
@@ -66,14 +70,31 @@ function extractSvgMarkup(dataUri: string): string {
   return decodeURIComponent(encoded);
 }
 
-export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
+const START_OVER_FAILED_MESSAGE = "We could not start over. Please try again.";
+
+export function MfaEnrollForm({ enrollment, onVerify, onStartOver }: MfaEnrollFormProps) {
   const colors = useThemeColors();
   const themed = useMemo(() => getThemedStyles(colors), [colors]);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const svgMarkup = extractSvgMarkup(enrollment.qrCode);
+  const [isStartingOver, setIsStartingOver] = useState(false);
+
+  // FP-218: after a reload only the manual key is restored, not the QR image.
+  const svgMarkup = enrollment.qrCode ? extractSvgMarkup(enrollment.qrCode) : null;
+
+  const handleStartOver = async () => {
+    if (!onStartOver) return;
+    setError(null);
+    setIsStartingOver(true);
+    try {
+      await onStartOver();
+    } catch {
+      setError(START_OVER_FAILED_MESSAGE);
+      setIsStartingOver(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -89,16 +110,26 @@ export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={[styles.instructions, themed.instructions]}>
-        Scan this QR code with your authenticator app (e.g. Google Authenticator, Authy).
+      {svgMarkup ? (
+        <>
+          <Text style={[styles.instructions, themed.instructions]}>
+            Scan this QR code with your authenticator app (e.g. Google Authenticator, Authy).
+          </Text>
+
+          {/* Deliberately not themed — see getThemedStyles' comment. */}
+          <View style={styles.qrWrapper} testID="mfa-enroll-qr">
+            <SvgXml xml={svgMarkup} width={220} height={220} />
+          </View>
+        </>
+      ) : (
+        <Text style={[styles.instructions, themed.restoredNote]} testID="mfa-enroll-restored-note">
+          Your setup key from before is shown below. If your authenticator app already has it, just enter the code.
+        </Text>
+      )}
+
+      <Text style={[styles.fallbackLabel, themed.fallbackLabel]}>
+        {svgMarkup ? "Can't scan? Enter this code manually:" : "Your setup key:"}
       </Text>
-
-      {/* Deliberately not themed — see getThemedStyles' comment. */}
-      <View style={styles.qrWrapper} testID="mfa-enroll-qr">
-        <SvgXml xml={svgMarkup} width={220} height={220} />
-      </View>
-
-      <Text style={[styles.fallbackLabel, themed.fallbackLabel]}>Can&apos;t scan? Enter this code manually:</Text>
       <Text selectable style={[styles.secret, themed.secret]} testID="mfa-enroll-secret">
         {enrollment.secret}
       </Text>
@@ -110,7 +141,7 @@ export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
         onChangeText={setCode}
         keyboardType="number-pad"
         maxLength={6}
-        editable={!isSubmitting}
+        editable={!isSubmitting && !isStartingOver}
         placeholderTextColor={colors.textMuted}
         testID="mfa-enroll-code-input"
       />
@@ -124,7 +155,7 @@ export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
       <Pressable
         style={[styles.button, themed.button, isSubmitting && styles.buttonDisabled]}
         onPress={handleSubmit}
-        disabled={isSubmitting || code.length < 6}
+        disabled={isSubmitting || isStartingOver || code.length < 6}
         testID="mfa-enroll-submit"
       >
         {isSubmitting ? (
@@ -133,6 +164,23 @@ export function MfaEnrollForm({ enrollment, onVerify }: MfaEnrollFormProps) {
           <Text style={styles.buttonText}>Verify and Enable</Text>
         )}
       </Pressable>
+
+      {enrollment.restored && onStartOver ? (
+        <Pressable
+          style={styles.startOverButton}
+          onPress={handleStartOver}
+          disabled={isSubmitting || isStartingOver}
+          accessibilityRole="button"
+          accessibilityLabel="Start over with a new setup key"
+          testID="mfa-enroll-start-over"
+        >
+          {isStartingOver ? (
+            <ActivityIndicator />
+          ) : (
+            <Text style={[styles.startOverText, themed.startOverText]}>Start over with a new key</Text>
+          )}
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -200,6 +248,17 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  startOverButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  startOverText: {
+    color: "#2563eb",
+    fontSize: 14,
     fontWeight: "600",
   },
 });
